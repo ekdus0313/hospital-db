@@ -45,4 +45,15 @@ ALTER TABLE `employee` ADD CONSTRAINT `PK_EMPLOYEE` PRIMARY KEY (
 ALTER TABLE `patient` ADD CONSTRAINT `PK_PATIENT` PRIMARY KEY (
 	`patient_no`
 );
-
+ALTER TABLE `patient` ADD CONSTRAINT `FK_insurance_TO_patient_1` FOREIGN KEY (
+	`insurance_code`
+)
+REFERENCES `insurance` (
+	`insurance_code`
+);
+ALTER TABLE `employee` ADD CONSTRAINT `FK_department_TO_employee_1` FOREIGN KEY (
+	`dept_code`
+)
+REFERENCES `department` (
+	`dept_code`
+);
