@@ -20,6 +20,7 @@
   "homepage": "https://github.com/ekdus0313/hospital-db#readme",
   "dependencies": {
     "dotenv": "^18.0.5",
+    "ejs": "^7.0.2",
     "express": "^5.2.1",
     "mysql2": "^3.24.5"
   },
