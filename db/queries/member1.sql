@@ -8,7 +8,7 @@ SELECT
     insurance_code
 FROM patient
 WHERE 1=1
-and username = ''
+AND username = 'hansung.kim'
 ;
 
 SELECT 
@@ -21,5 +21,6 @@ SELECT
     emp_status
 FROM employee
 WHERE 1=1
-and username = ''
+AND emp_status = '재직';
+AND username = 'taehun.kim'
 ;
