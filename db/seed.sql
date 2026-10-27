@@ -317,3 +317,60 @@ UNION ALL SELECT 'bed',              COUNT(*) FROM bed
 UNION ALL SELECT 'admission',        COUNT(*) FROM admission
 UNION ALL SELECT 'consultation_fee', COUNT(*) FROM consultation_fee
 UNION ALL SELECT 'payment',          COUNT(*) FROM payment;
+
+-- =====================================================================
+-- 6주차 화면용 보강 데이터
+-- 특정 상태의 행이 없으면 화면이 빈 표로 나와서 추가한다.
+-- 정하늘 : 접수 → 진료 → 검사(지시) → 입원중 → 미수납
+-- 박도현 : 접수만 하고 진료 대기 중
+-- =====================================================================
+
+-- 박도현을 '접수' 상태로 (의사 대기 환자 목록용)
+UPDATE reservation
+   SET reservation_status = '접수',
+       reception_at       = '2026-10-05 14:38:00',
+       waiting_no         = 9
+ WHERE reservation_no = 'R20261001-0021';
+
+-- 병상 하나를 '사용중'으로 (병상 현황 화면용)
+UPDATE bed SET bed_status = '사용중' WHERE bed_no = '5103-1';
+
+INSERT INTO reservation (reservation_no, schedule_no, reserved_at, reservation_type,
+                         reservation_status, canceled_at, reception_at, waiting_no,
+                         patient_no, created_at) VALUES
+('R20261004-0007', '1021', '2026-10-05 11:00:00', '사전예약', '진료완료',
+ NULL, '2026-10-05 10:52:00', 8, 'P2026000098', '2026-10-04 15:10:00');
+
+INSERT INTO medical_record (medical_record_no, treated_at, symptom, opinion,
+                            patient_no, employee_no, reservation_no) VALUES
+('MR20261005-0035', '2026-10-05 11:05:00',
+ '이틀 전부터 구토와 설사 반복, 물도 넘기기 어렵고 어지럼 동반.',
+ '탈수 소견. 수액 치료 위해 입원 결정. 혈액검사 결과 확인 후 재평가.',
+ 'P2026000098', 'E10021', 'R20261004-0007');
+
+INSERT INTO diagnosis (medical_record_no, disease_code, diagnosis_type) VALUES
+('MR20261005-0035', 'K29.7', '주진단');
+
+INSERT INTO prescription (medical_record_no, drug_code, dose_once,
+                          dose_per_day, dose_days, applied_price) VALUES
+('MR20261005-0035', 'M642100010', 1, 1, 7, 1050);
+
+INSERT INTO test (test_no, tested_at, test_result, applied_price,
+                  test_status, medical_record_no, test_code) VALUES
+('EX20261005-0120', '2026-10-05 11:30:00', '4.2 mg/dL', 3000, '완료',
+ 'MR20261005-0035', 'T1210'),
+('EX20261005-0121', NULL, NULL, 2500, '지시',
+ 'MR20261005-0035', 'T1050');
+
+INSERT INTO admission (admission_no, admit_at, discharge_at, adm_status,
+                       bed_no, patient_no, medical_record_no, employee_no) VALUES
+('H20261005-009', '2026-10-05 13:00:00', NULL, '입원중',
+ '5103-1', 'P2026000098', 'MR20261005-0035', 'E10021');
+
+INSERT INTO payment (payment_no, consult_amount, test_amount, drug_amount, room_amount,
+                     total_amount, patient_amount, pay_method, paid_at,
+                     pay_status, fee_code, medical_record_no) VALUES
+('B20261005-0050', 18400, 5500, 7350, 0, 31250, 9370, NULL, NULL,
+ '미수납', 'F01', 'MR20261005-0035');
+-- 검사료 3,000 + 2,500 = 5,500 / 약제료 1,050 × 7일 = 7,350
+-- 병실료는 퇴원 전이라 0. 청구 31,250 × 30% = 9,375 → 10원 절사 9,370
