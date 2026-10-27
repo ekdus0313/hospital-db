@@ -4,7 +4,8 @@
   "description": "hospital-db",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node app.js",
+    "dev": "nodemon app.js"
   },
   "repository": {
     "type": "git",
@@ -19,9 +20,11 @@
   },
   "homepage": "https://github.com/ekdus0313/hospital-db#readme",
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "dotenv": "^18.0.5",
     "ejs": "^7.0.2",
     "express": "^5.2.1",
+    "express-session": "^1.19.0",
     "mysql2": "^3.24.5"
   },
   "devDependencies": {
