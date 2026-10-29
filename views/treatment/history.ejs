@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>진료 이력 조회</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <!-- 공통 레이아웃이 올라오면 머리말·메뉴를 여기에 넣는다 -->
+
+  <h1>진료 이력 조회</h1>
+
+  <form method="get" action="/treatment/history">
+    <label>환자
+      <select name="patient" onchange="this.form.submit()">
+        <option value="">-- 선택 --</option>
+        <% patients.forEach(function (p) { %>
+          <option value="<%= p.patient_no %>" <%= p.patient_no === selected ? 'selected' : '' %>>
+            <%= p.patient_name %> (<%= p.patient_no %>)
+          </option>
+        <% }) %>
+      </select>
+    </label>
+    <button type="submit">조회</button>
+  </form>
+
+  <% if (!selected) { %>
+    <p>환자를 선택하세요.</p>
+  <% } else if (rows.length === 0) { %>
+    <p>진료 이력이 없습니다.</p>
+  <% } else { %>
+    <table>
+      <thead>
+        <tr>
+          <th>진료번호</th>
+          <th>진료일시</th>
+          <th>진료과</th>
+          <th>담당의사</th>
+          <th>증상</th>
+          <th>진단</th>
+          <th>처방</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% rows.forEach(function (r) { %>
+          <tr>
+            <td><%= r.medical_record_no %></td>
+            <td><%= r.treated_at %></td>
+            <td><%= r.dept_name %></td>
+            <td><%= r.employee_name %></td>
+            <td><%= r.symptom %></td>
+            <td><%= r.diagnosis === null ? '-' : r.diagnosis %></td>
+            <td><%= r.prescription === null ? '-' : r.prescription %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</body>
+</html>

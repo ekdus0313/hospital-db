@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>대기 환자 목록</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <!-- 공통 레이아웃이 올라오면 머리말·메뉴를 여기에 넣는다 -->
+
+  <h1>대기 환자 목록</h1>
+
+  <% if (rows.length === 0) { %>
+    <p>접수된 환자가 없습니다.</p>
+  <% } else { %>
+    <table>
+      <thead>
+        <tr>
+          <th>대기번호</th>
+          <th>접수시각</th>
+          <th>환자번호</th>
+          <th>환자</th>
+          <th>진료과</th>
+          <th>담당의사</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% rows.forEach(function (r) { %>
+          <tr>
+            <td><%= r.waiting_no %></td>
+            <td><%= r.reception_at %></td>
+            <td><%= r.patient_no %></td>
+            <td><%= r.patient_name %></td>
+            <td><%= r.dept_name %></td>
+            <td><%= r.employee_name %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</body>
+</html>
