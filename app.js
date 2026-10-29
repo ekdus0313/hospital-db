@@ -44,9 +44,9 @@ app.use((req, res, next) => {
 
 // 라우터 — 각자 만들면 자기 줄의 // 를 지우세요
 app.use('/auth',        require('./routes/auth'));
-// app.use('/reservation', require('./routes/reservation'));
-// app.use('/treatment',   require('./routes/treatment'));
-// app.use('/admission',   require('./routes/admission'));
+app.use('/reservation', require('./routes/reservation'));
+app.use('/treatment',   require('./routes/treatment'));
+app.use('/admission',   require('./routes/admission'));
 
 app.get('/', (req, res) => {
   res.send('Hospital Management System Server Running!');

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>예약 가능 시간 조회</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <!-- 공통 레이아웃이 올라오면 머리말·메뉴를 여기에 넣는다 -->
+
+  <h1>예약 가능 시간 조회</h1>
+
+  <!-- 칸을 고를 때마다 폼을 보내서, 다음 칸의 목록을 서버에서 채워 온다 -->
+  <form method="get" action="/reservation/available">
+    <label>진료과
+      <select name="dept" onchange="this.form.submit()">
+        <option value="">-- 선택 --</option>
+        <% depts.forEach(function (d) { %>
+          <option value="<%= d.dept_code %>" <%= d.dept_code === selected.dept ? 'selected' : '' %>><%= d.dept_name %></option>
+        <% }) %>
+      </select>
+    </label>
+
+    <label>의사
+      <select name="doctor" onchange="this.form.submit()" <%= selected.dept ? '' : 'disabled' %>>
+        <option value="">-- 선택 --</option>
+        <% doctors.forEach(function (d) { %>
+          <option value="<%= d.employee_no %>" <%= d.employee_no === selected.doctor ? 'selected' : '' %>><%= d.employee_name %></option>
+        <% }) %>
+      </select>
+    </label>
+
+    <label>날짜
+      <select name="date" onchange="this.form.submit()" <%= selected.doctor ? '' : 'disabled' %>>
+        <option value="">-- 선택 --</option>
+        <% dates.forEach(function (d) { %>
+          <option value="<%= d.schedule_date %>" <%= d.schedule_date === selected.date ? 'selected' : '' %>><%= d.schedule_date %></option>
+        <% }) %>
+      </select>
+    </label>
+
+    <button type="submit">조회</button>
+  </form>
+
+  <% if (!selected.dept) { %>
+    <p>진료과를 선택하세요.</p>
+  <% } else if (doctors.length === 0) { %>
+    <p>이 진료과에는 진료 중인 의사가 없습니다.</p>
+  <% } else if (!selected.doctor) { %>
+    <p>의사를 선택하세요.</p>
+  <% } else if (dates.length === 0) { %>
+    <p>예약할 수 있는 진료 일정이 없습니다.</p>
+  <% } else if (!selected.date) { %>
+    <p>날짜를 선택하세요.</p>
+  <% } else if (rows.length === 0) { %>
+    <p>이 날짜에는 예약 가능한 시간이 없습니다.</p>
+  <% } else { %>
+    <table>
+      <thead>
+        <tr>
+          <th>일정번호</th>
+          <th>시작시간</th>
+          <th>종료시간</th>
+          <th>정원</th>
+          <th>예약인원</th>
+          <th>남은자리</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% rows.forEach(function (r) { %>
+          <tr>
+            <td><%= r.schedule_no %></td>
+            <td><%= r.start_time %></td>
+            <td><%= r.end_time %></td>
+            <td><%= r.capacity %></td>
+            <td><%= r.reserved_count %></td>
+            <td><%= r.remaining %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</body>
+</html>
