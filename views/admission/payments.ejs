@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>수납 대상 목록</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <!-- 공통 레이아웃이 올라오면 머리말·메뉴를 여기에 넣는다 -->
+
+  <h1>수납 대상 목록</h1>
+
+  <% if (rows.length === 0) { %>
+    <p>수납할 진료가 없습니다.</p>
+  <% } else { %>
+    <table>
+      <thead>
+        <tr>
+          <th>진료번호</th>
+          <th>진료일시</th>
+          <th>환자</th>
+          <th>진료과</th>
+          <th>담당의사</th>
+          <th>청구금액</th>
+          <th>본인부담금</th>
+          <th>수납상태</th>
+          <th>비고</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% rows.forEach(function (r) { %>
+          <tr>
+            <td><%= r.medical_record_no %></td>
+            <td><%= r.treated_at %></td>
+            <td><%= r.patient_name %></td>
+            <td><%= r.dept_name %></td>
+            <td><%= r.employee_name %></td>
+            <td><%= r.total_amount === null ? '-' : Number(r.total_amount).toLocaleString() + '원' %></td>
+            <td><%= r.patient_amount === null ? '-' : Number(r.patient_amount).toLocaleString() + '원' %></td>
+            <td><%= r.pay_status %></td>
+            <td>
+              <% if (r.adm_status === '입원중') { %>
+                입원중 — 퇴원 후 정산
+              <% } else if (r.payment_no === null) { %>
+                진료비 계산 전
+              <% } else { %>
+                -
+              <% } %>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</body>
+</html>
