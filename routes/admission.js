@@ -5,12 +5,15 @@
 //   GET /admission/beds       관리자 첫 화면 — 병상 현황
 //   GET /admission/payments   수납 대상 목록
 //
-// 직종별 접근 제한 함수가 올라오면 주소 옆에 끼운다.
-//   예) router.get('/beds', 관리자만, async (req, res) => { ... })
+// 접근 제한 — requireRole (routes/auth.js, 조원1)
+//   로그인 안 했으면 로그인 화면으로, 역할이 다르면 403 으로 막는다.
+//   병상 현황 : 관리자 + 원무 (원무가 입원 등록 때 빈 병상을 본다, R-0023)
+//   수납 대상 : 원무 + 관리자 (수납은 원무 업무, R-0027)
 // =====================================================
 
 const express = require('express');
 const db = require('../db/db');
+const { requireRole } = require('./auth');
 
 const router = express.Router();
 
@@ -18,7 +21,7 @@ const router = express.Router();
 // ① 관리자 첫 화면 — 병상 현황
 //    5주차 member4.sql ③ 쿼리(병실별 사용 중 병상 수)를 그대로 썼다.
 //    병실에는 '만실' 칸을 두지 않고, 병상 상태를 세서 그때그때 계산한다.
-router.get('/beds', async (req, res) => {
+router.get('/beds', requireRole('관리자', '원무'), async (req, res) => {
   // 병실별 요약 — 병상이 0개인 병실도 보이도록 LEFT JOIN
   const [rooms] = await db.query(`
     SELECT r.ward,
@@ -64,7 +67,7 @@ router.get('/beds', async (req, res) => {
 //    - 수납 행은 있지만 상태가 '미수납'인 진료
 //    LEFT JOIN 으로 붙여서, 수납 행이 없으면 상태를 '미수납'으로 표시한다 (R-0028).
 //    입원 중인 환자는 병실료가 정해지지 않았으니 퇴원 후 정산이라고 알려준다.
-router.get('/payments', async (req, res) => {
+router.get('/payments', requireRole('원무', '관리자'), async (req, res) => {
   const [rows] = await db.query(`
     SELECT mr.medical_record_no,
            DATE_FORMAT(mr.treated_at, '%Y-%m-%d %H:%i') AS treated_at,
