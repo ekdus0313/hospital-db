@@ -4,6 +4,7 @@ const path = require('path');
 require('dotenv').config();
 
 const db = require('./db/db');
+const { menuFor, roleLabelFor } = require('./lib/menu');   // 역할별 메뉴 (조원5)
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -39,6 +40,10 @@ app.use(session({
 // 모든 EJS 화면에서 로그인 사용자 정보 사용
 app.use((req, res, next) => {
   res.locals.user = req.session.user || null;
+  // 공통 레이아웃(views/layout/header.ejs)에서 쓰는 값 (조원5)
+  res.locals.menu        = menuFor(res.locals.user);       // 역할별 메뉴
+  res.locals.roleLabel   = roleLabelFor(res.locals.user);  // 머리말의 역할 이름
+  res.locals.currentPath = req.path;                       // 지금 보고 있는 메뉴 강조용
   next();
 });
 
@@ -47,9 +52,20 @@ app.use('/auth',        require('./routes/auth'));
 app.use('/reservation', require('./routes/reservation'));
 app.use('/treatment',   require('./routes/treatment'));
 app.use('/admission',   require('./routes/admission'));
+app.use('/patient',     require('./routes/patient'));   // 환자 화면 (조원5)
 
-app.get('/', (req, res) => {
-  res.send('Hospital Management System Server Running!');
+// 메인 화면 — 로그인 전에는 소개, 로그인 후에는 역할별 바로가기 (조원5)
+app.get('/', async (req, res) => {
+  let home = null;
+  const user = req.session.user;
+  if (user && user.role === 'patient') {
+    try {
+      home = await require('./routes/patient').loadPatientHome(user.patient_no);
+    } catch (err) {
+      console.error('메인 화면 요약 조회 오류:', err);
+    }
+  }
+  res.render('index', { home });
 });
 
 app.listen(PORT, async () => {

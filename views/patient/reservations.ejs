@@ -1,0 +1,50 @@
+<%# views/patient/reservations.ejs — 내 예약 (화면 P-02) %>
+<%- include('../layout/header', { title: '내 예약', subtitle: '최근 예약부터 보여 드립니다. 접수가 끝난 예약은 변경하거나 취소할 수 없습니다.' }) %>
+<%
+  // 상태 → 색. 색만으로 구분하지 않도록 글자도 같이 보여 준다.
+  const tag = s => ({ '예약': 'info', '접수': 'warn', '진료완료': 'ok', '취소': 'neutral' })[s] || 'neutral';
+%>
+
+<div class="sheet-head">
+  <dl class="stats stats--inline">
+    <div><dt>다가오는 예약</dt><dd><%= upcoming %><small>건</small></dd></div>
+    <div><dt>전체 예약</dt><dd><%= rows.length %><small>건</small></dd></div>
+  </dl>
+  <a class="btn btn--primary" href="/reservation/available">진료 예약하기</a>
+</div>
+
+<% if (rows.length === 0) { %>
+  <p class="empty">아직 예약 내역이 없습니다. 오른쪽 위 ‘진료 예약하기’에서 예약할 수 있습니다.</p>
+<% } else { %>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>예약일시</th>
+          <th>진료과</th>
+          <th>담당 교수</th>
+          <th>구분</th>
+          <th>상태</th>
+          <th class="num">대기번호</th>
+          <th>예약번호</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% rows.forEach(function (r) { %>
+          <tr class="<%= r.reservation_status === '취소' ? 'row-muted' : '' %>">
+            <td class="tnum"><b><%= r.reserved_at %></b></td>
+            <td><%= r.dept_name %></td>
+            <td><%= r.employee_name %></td>
+            <td><%= r.reservation_type %></td>
+            <td><span class="tag tag--<%= tag(r.reservation_status) %>"><%= r.reservation_status %></span></td>
+            <td class="num"><%= r.waiting_no === null ? '–' : r.waiting_no %></td>
+            <td class="code"><%= r.reservation_no %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">취소한 예약도 지워지지 않고 ‘취소’로 남습니다.</p>
+<% } %>
+
+<%- include('../layout/footer') %>
