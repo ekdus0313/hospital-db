@@ -1,0 +1,107 @@
+<%# views/index.ejs — 메인 화면 (조원5, 화면 C-01). 주소: / %>
+<%
+  const _days = ['', '일', '월', '화', '수', '목', '금', '토'];   // DAYOFWEEK: 1=일요일
+  const isPatient = user && user.role === 'patient';
+  let heroTitle, heroSub, heroActions = '';
+
+  if (!user) {
+    heroTitle = '진료 예약부터 수납까지\n한곳에서 확인하세요';
+    heroSub = '예약, 접수, 진료, 검사, 입원, 수납 기록을 하나의 시스템에서 관리합니다.';
+    heroActions = '<a class="btn btn--onDark" href="/auth/login">로그인</a>'
+                + '<a class="btn btn--ghostDark" href="/auth/register">환자 회원가입</a>';
+  } else if (isPatient) {
+    heroTitle = user.name + '님, 안녕하세요';
+    heroSub = '다가오는 예약과 최근 진료 내역을 확인하세요.';
+  } else {
+    heroTitle = user.name + ' ' + (roleLabel === '의사' ? '교수님' : '님');
+    heroSub = '오늘 처리할 업무를 아래에서 선택하세요.';
+  }
+%>
+<%- include('layout/header', { title: heroTitle, subtitle: heroSub, variant: 'home', heroActions }) %>
+
+<% if (!user) { %>
+  <section class="process">
+    <div class="process__head">
+      <h2>외래 진료 절차</h2>
+      <span class="muted">처음 방문하시는 분은 회원가입 후 예약해 주세요.</span>
+    </div>
+    <ol>
+      <li><b>진료 예약</b><span>진료과, 의사, 날짜, 시간 순으로 선택합니다.</span></li>
+      <li><b>내원 접수</b><span>병원에 오시면 원무과에서 접수하고 대기번호를 받습니다.</span></li>
+      <li><b>진료</b><span>의사가 진찰한 뒤 진단·처방하고, 필요하면 검사를 정합니다.</span></li>
+      <li><b>검사</b><span>검사실에서 검사를 받고, 결과는 진료 이력에서 볼 수 있습니다.</span></li>
+      <li><b>수납</b><span>진찰료·검사료·약제료·병실료를 합친 금액 중 본인부담금을 냅니다.</span></li>
+    </ol>
+  </section>
+
+<% } else if (isPatient) { %>
+  <div class="home-grid">
+    <section class="box">
+      <div class="box__head">
+        <h2>다음 진료 예약</h2>
+        <a href="/patient/reservations">예약 전체 보기</a>
+      </div>
+      <% if (home && home.next) { %>
+        <div class="next">
+          <div class="datebox">
+            <span class="datebox__ym"><%= home.next.ym %></span>
+            <span class="datebox__d"><%= home.next.day %></span>
+          </div>
+          <div>
+            <div class="next__time"><%= _days[home.next.dow] %>요일 <%= home.next.hm %></div>
+            <div class="next__who"><%= home.next.dept_name %> · <%= home.next.employee_name %> 교수</div>
+            <div class="next__status"><span class="tag tag--<%= home.next.reservation_status === '접수' ? 'warn' : 'info' %>"><%= home.next.reservation_status %></span></div>
+          </div>
+        </div>
+      <% } else { %>
+        <p class="empty empty--sm">예정된 예약이 없습니다. <a href="/reservation/available">진료 예약하기</a></p>
+      <% } %>
+    </section>
+
+    <section class="box recent">
+      <div class="box__head">
+        <h2>최근 진료</h2>
+        <a href="/patient/records">진료 이력 보기</a>
+      </div>
+      <% if (home && home.recent) { %>
+        <dl>
+          <dt>진료일</dt><dd class="tnum"><%= home.recent.treated_at %></dd>
+          <dt>진료과</dt><dd><%= home.recent.dept_name %> · <%= home.recent.employee_name %> 교수</dd>
+          <dt>주진단</dt><dd><%= home.recent.main_dx || '-' %></dd>
+          <dt>수납</dt>
+          <dd><% if (home.unpaid > 0) { %><span class="tag tag--danger">미수납 <%= home.unpaid %>건</span><% } else { %><span class="tag tag--ok">미수납 없음</span><% } %></dd>
+        </dl>
+      <% } else { %>
+        <p class="empty empty--sm">아직 진료 기록이 없습니다.</p>
+      <% } %>
+    </section>
+  </div>
+
+  <section class="box box--spaced">
+    <div class="box__head"><h2>바로가기</h2></div>
+    <nav class="quick">
+      <% menu.forEach(function (m) { %>
+        <a href="<%= m.href %>"><b><%= m.label %></b><span><%= m.desc %></span></a>
+      <% }) %>
+    </nav>
+  </section>
+
+<% } else { %>
+  <section class="box">
+    <div class="box__head">
+      <h2>업무 바로가기</h2>
+      <span class="muted">화면 <%= menu.length %>개</span>
+    </div>
+    <% if (menu.length === 0) { %>
+      <p class="empty empty--sm">사용할 수 있는 메뉴가 없습니다.</p>
+    <% } else { %>
+      <nav class="quick">
+        <% menu.forEach(function (m) { %>
+          <a href="<%= m.href %>"><b><%= m.label %></b><span><%= m.desc %></span></a>
+        <% }) %>
+      </nav>
+    <% } %>
+  </section>
+<% } %>
+
+<%- include('layout/footer') %>

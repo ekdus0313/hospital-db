@@ -1,0 +1,95 @@
+<%# views/patient/records.ejs — 내 진료 이력 (화면 P-06, 상세 P-07 을 펼치기로 합침) %>
+<%- include('../layout/header', { title: '내 진료 이력', subtitle: '최근 진료부터 보여 드립니다. 날짜를 누르면 진단·처방·검사 결과가 펼쳐집니다.' }) %>
+
+<% if (rows.length === 0) { %>
+  <p class="empty">아직 진료 기록이 없습니다.</p>
+<% } else { %>
+  <% rows.forEach(function (r, i) { %>
+    <%
+      const main = r.diagnoses.find(d => d.diagnosis_type === '주진단');
+      const ym  = r.treated_at.slice(0, 7).replace('-', '.');   // 2026.10
+      const day = r.treated_at.slice(8, 10);                    // 05
+      const hm  = r.treated_at.slice(11, 16);                   // 10:38
+    %>
+    <details class="visit" <%= i === 0 ? 'open' : '' %>>
+      <summary>
+        <div class="datebox">
+          <span class="datebox__ym"><%= ym %></span>
+          <span class="datebox__d"><%= day %></span>
+        </div>
+        <div class="visit__main">
+          <div class="visit__dx"><%= main ? main.disease_name : '진단 미등록' %></div>
+          <div class="visit__who"><%= r.dept_name %> · <%= r.employee_name %> 교수 · <span class="tnum"><%= hm %></span></div>
+        </div>
+        <span class="visit__toggle"></span>
+      </summary>
+
+      <div class="visit__body">
+        <dl class="kv">
+          <dt>증상</dt><dd><%= r.symptom %></dd>
+          <dt>소견</dt><dd><%= r.opinion %></dd>
+        </dl>
+
+        <h3>진단</h3>
+        <% if (r.diagnoses.length === 0) { %>
+          <p class="empty empty--sm">등록된 진단이 없습니다.</p>
+        <% } else { %>
+          <table>
+            <thead><tr><th class="col-code">질병코드</th><th>질병명</th><th class="col-type">구분</th></tr></thead>
+            <tbody>
+              <% r.diagnoses.forEach(function (d) { %>
+                <tr>
+                  <td class="code"><%= d.disease_code %></td>
+                  <td><%= d.disease_name %></td>
+                  <td><%= d.diagnosis_type %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        <% } %>
+
+        <h3>처방</h3>
+        <% if (r.prescriptions.length === 0) { %>
+          <p class="empty empty--sm">처방이 없습니다.</p>
+        <% } else { %>
+          <table>
+            <thead>
+              <tr><th>약품명</th><th class="num">1회 투약량</th><th class="num">1일 횟수</th><th class="num">투약일수</th><th class="num">총 투약량</th></tr>
+            </thead>
+            <tbody>
+              <% r.prescriptions.forEach(function (p) { %>
+                <tr>
+                  <td><%= p.drug_name %></td>
+                  <td class="num"><%= p.dose_once %></td>
+                  <td class="num"><%= p.dose_per_day %>회</td>
+                  <td class="num"><%= p.dose_days %>일</td>
+                  <td class="num"><b><%= p.total_dose %></b></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        <% } %>
+
+        <h3>검사</h3>
+        <% if (r.tests.length === 0) { %>
+          <p class="empty empty--sm">받은 검사가 없습니다.</p>
+        <% } else { %>
+          <table>
+            <thead><tr><th>검사명</th><th>검사일시</th><th>결과</th></tr></thead>
+            <tbody>
+              <% r.tests.forEach(function (t) { %>
+                <tr>
+                  <td><%= t.test_name %></td>
+                  <td class="tnum"><%= t.tested_at || '–' %></td>
+                  <td><% if (t.test_result) { %><%= t.test_result %><% } else { %><span class="tag tag--warn">결과 대기</span><% } %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        <% } %>
+      </div>
+    </details>
+  <% }) %>
+<% } %>
+
+<%- include('../layout/footer') %>
