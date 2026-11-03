@@ -1,12 +1,4 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-  <meta charset="UTF-8">
-  <title>예약 목록</title>
-  <link rel="stylesheet" href="/css/style.css">
-</head>
-<body>
-  <!-- 공통 레이아웃이 올라오면 머리말·메뉴를 여기에 넣는다 -->
+<%- include('../layout/header', { title: '예약 목록' }) %>
 
   <h1>예약 목록</h1>
 
@@ -42,5 +34,4 @@
       </tbody>
     </table>
   <% } %>
-</body>
-</html>
+<%- include('../layout/footer') %>

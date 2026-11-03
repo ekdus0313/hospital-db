@@ -53,12 +53,29 @@ function encryptSSN(value) {
 
 async function getInsuranceCodes() {
     const [rows] = await db.query(`
-        SELECT insurance_code
+        SELECT insurance_code, insurance_name, copay_rate
         FROM insurance
         ORDER BY insurance_code
     `);
     return rows;
 }
+
+// 입력 오류 안내에 쓸 화면 표시 이름
+const FIELD_LABELS = {
+    patient_name: '이름',
+    username: '아이디',
+    password: '비밀번호',
+    ssn1: '주민등록번호 앞자리',
+    ssn2: '주민등록번호 뒷자리',
+    birth_date: '생년월일',
+    gender: '성별',
+    phone: '전화번호',
+    zip_code: '우편번호',
+    address1: '기본주소',
+    address2: '상세주소',
+    address3: '참고항목',
+    insurance_code: '보험 유형'
+};
 
 function safeOld(body = {}) {
     const { password, ssn1, ssn2, ...otherFields } = body;
@@ -113,7 +130,7 @@ router.post('/login', async (req, res) => {
         ) {
         return loginError(
             res,
-            '아이디와 비밀번호를 입력해주세요.',
+            '아이디와 비밀번호를 모두 입력해 주세요.',
             400
         );
     }
@@ -149,7 +166,7 @@ router.post('/login', async (req, res) => {
         console.error('직원/환자 아이디 중복:', loginId);
         return loginError(
             res,
-            '계정 확인이 필요합니다. 관리자에게 문의해주세요.'
+            '계정 확인이 필요합니다. 병원 관리자에게 문의해 주세요.'
         );
         }
 
@@ -167,14 +184,14 @@ router.post('/login', async (req, res) => {
         if (!validPassword) {
             return loginError(
             res,
-            '아이디 또는 비밀번호가 올바르지 않습니다.'
+            '아이디 또는 비밀번호가 맞지 않습니다. 다시 확인해 주세요.'
             );
         }
 
         if (employee.emp_status !== '재직') {
             return loginError(
             res,
-            '현재 로그인할 수 없는 직원 계정입니다.'
+            '재직 중이 아닌 직원 계정은 로그인할 수 없습니다. 병원 관리자에게 문의해 주세요.'
             );
         }
 
@@ -199,7 +216,7 @@ router.post('/login', async (req, res) => {
         if (!validPassword) {
             return loginError(
             res,
-            '아이디 또는 비밀번호가 올바르지 않습니다.'
+            '아이디 또는 비밀번호가 맞지 않습니다. 다시 확인해 주세요.'
             );
         }
 
@@ -215,7 +232,7 @@ router.post('/login', async (req, res) => {
     } else {
         return loginError(
             res,
-            '아이디 또는 비밀번호가 올바르지 않습니다.'
+            '아이디 또는 비밀번호가 맞지 않습니다. 다시 확인해 주세요.'
         );
     }
 
@@ -247,7 +264,7 @@ router.post('/login', async (req, res) => {
         console.error('로그인 오류:', err);
 
     return res.status(500).send(
-        '로그인 중 오류가 발생했습니다.'
+        '로그인 중 문제가 생겼습니다. 잠시 후 다시 시도해 주세요.'
     );
     }
 });
@@ -342,7 +359,7 @@ router.post(
 
         return await renderRegister(
             res,
-            `입력값을 확인해주세요: ${invalidFields.join(', ')}`,
+            `다음 항목을 다시 확인해 주세요: ${invalidFields.map(f => FIELD_LABELS[f] || f).join(', ')}`,
             400,
             old
             );
@@ -375,7 +392,7 @@ router.post(
         ) {
             return await renderRegister(
             res,
-            '생년월일이 올바르지 않습니다.',
+            '생년월일을 다시 확인해 주세요. 오늘 이후 날짜는 입력할 수 없습니다.',
             400,
             old
             );
@@ -401,7 +418,7 @@ router.post(
         ) {
             return await renderRegister(
             res,
-            '이미 사용 중인 아이디입니다.',
+            '이미 사용 중인 아이디입니다. 다른 아이디를 입력해 주세요.',
             400,
             old
             );
@@ -417,7 +434,7 @@ router.post(
         if (insurance.length === 0) {
             return await renderRegister(
             res,
-            '올바른 보험코드를 선택해주세요.',
+            '보험 유형을 목록에서 선택해 주세요.',
             400,
             old
             );
@@ -492,7 +509,7 @@ router.post(
         if (err.code === 'ER_DUP_ENTRY') {
             return await renderRegister(
             res,
-            '중복된 아이디 또는 환자번호입니다.',
+            '이미 가입된 아이디 또는 주민등록번호입니다. 가입한 적이 있다면 로그인해 주세요.',
             400,
             old
             );
@@ -500,7 +517,7 @@ router.post(
 
         return await renderRegister(
             res,
-            '회원가입 처리 중 오류가 발생했습니다.',
+            '회원가입 중 문제가 생겼습니다. 잠시 후 다시 시도해 주세요.',
             500,
             old
         );
