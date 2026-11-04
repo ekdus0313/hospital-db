@@ -11,33 +11,47 @@
 // =====================================================
 
 const express = require('express');
+
 const db = require('../db/db');
+const { requireRole } = require('./auth');     // ← 추가
 
 const router = express.Router();
 
 
-// ① 의사 첫 화면 — 접수된 환자 목록
-//    로그인이 붙으면 "나에게" 접수된 환자만 거른다.
-//    지금은 세션이 없어서 전부 보여준다.
-router.get('/doctor', async (req, res) => {
-  const [rows] = await db.query(`
-    SELECT r.reservation_no,
-           r.waiting_no,
-           DATE_FORMAT(r.reception_at, '%H:%i') AS reception_at,
-           p.patient_no,
-           p.patient_name,
-           d.dept_name,
-           e.employee_name
-    FROM   reservation      r
-    JOIN   patient          p  ON p.patient_no   = r.patient_no
-    JOIN   medical_schedule ms ON ms.schedule_no = r.schedule_no
-    JOIN   employee         e  ON e.employee_no  = ms.employee_no
-    JOIN   department       d  ON d.dept_code    = e.dept_code
-    WHERE  r.reservation_status = '접수'
-    ORDER BY r.waiting_no
-  `);
+// ① 의사 첫 화면 — 고른 날짜에 "나에게" 접수된 환자 목록
+//    날짜를 안 고르면 오늘. 대기번호는 의사별·일자별로 1번부터라서
+//    날짜를 거르지 않으면 어제 번호와 섞여 순서가 맞지 않는다.
+router.get('/doctor', requireRole('의사'), async (req, res) => {
+  try {
+    const employeeNo = req.session.user.employee_no;
 
-  res.render('treatment/doctor', { rows });
+    const today = new Date().toISOString().slice(0, 10);   // YYYY-MM-DD
+    const date  = req.query.date || today;
+
+    const [rows] = await db.query(`
+      SELECT r.reservation_no,
+             r.waiting_no,
+             DATE_FORMAT(r.reception_at, '%H:%i') AS reception_at,
+             p.patient_no,
+             p.patient_name,
+             d.dept_name,
+             e.employee_name
+      FROM   reservation      r
+      JOIN   patient          p  ON p.patient_no   = r.patient_no
+      JOIN   medical_schedule ms ON ms.schedule_no = r.schedule_no
+      JOIN   employee         e  ON e.employee_no  = ms.employee_no
+      JOIN   department       d  ON d.dept_code    = e.dept_code
+      WHERE  r.reservation_status = '접수'
+        AND  DATE(r.reception_at) = ?        -- 고른 날짜에 접수한 건만
+        AND  ms.employee_no       = ?        -- 로그인한 의사 본인 환자만
+      ORDER BY r.waiting_no
+    `, [date, employeeNo]);
+
+    res.render('treatment/doctor', { rows, date, today });
+  } catch (err) {
+    console.error('대기 환자 목록 조회 오류:', err);
+    res.status(500).send('대기 환자 목록을 불러오는 중 오류가 발생했습니다.');
+  }
 });
 
 

@@ -2,8 +2,17 @@
 
   <h1>대기 환자 목록</h1>
 
-  <% if (rows.length === 0) { %>
-    <p>접수된 환자가 없습니다.</p>
+  <form method="get" action="/treatment/doctor" style="margin: 14px 0;">
+    <label for="date">접수일자 </label>
+    <input type="date" id="date" name="date" value="<%= date %>">
+    <button type="submit">조회</button>
+    <% if (date !== today) { %>
+      <a href="/treatment/doctor" style="margin-left:10px;">오늘로</a>
+    <% } %>
+  </form>
+
+    <% if (rows.length === 0) { %>
+    <p><%= date %> 에 접수된 환자가 없습니다.</p>
   <% } else { %>
     <table>
       <thead>
