@@ -261,14 +261,11 @@ CREATE TABLE admission (
   discharge_at      DATETIME     NULL,             -- 퇴원일시 (입원 중엔 비어 있음)
   adm_status        VARCHAR(20)  NOT NULL DEFAULT '입원중',  -- 입원중·퇴원
   bed_no            VARCHAR(20)  NOT NULL,         -- 배정 병상
-  patient_no        VARCHAR(20)  NOT NULL,         -- 환자
   medical_record_no VARCHAR(20)  NOT NULL,         -- 입원 근거 진료
-  employee_no       VARCHAR(20)  NOT NULL,         -- 주치의
   PRIMARY KEY (admission_no),
+  UNIQUE (medical_record_no),                      -- 진료 1건당 입원 1건
   FOREIGN KEY (bed_no)            REFERENCES bed(bed_no),
-  FOREIGN KEY (patient_no)        REFERENCES patient(patient_no),
-  FOREIGN KEY (medical_record_no) REFERENCES medical_record(medical_record_no),
-  FOREIGN KEY (employee_no)       REFERENCES employee(employee_no)
+  FOREIGN KEY (medical_record_no) REFERENCES medical_record(medical_record_no)
 );
 
 CREATE TABLE consultation_fee (
