@@ -270,9 +270,9 @@ INSERT INTO bed (bed_no, bed_status, room_no) VALUES
 -- 16. 입원 (admission) — 06-5 입원 수속 및 퇴원 기록 그대로
 --     재원일수 = 10-11 − 10-06 = 5일 → 병실료 5 × 42,000 = 210,000
 -- ---------------------------------------------------------------------
-INSERT INTO admission (admission_no, admit_at, discharge_at, adm_status, bed_no, patient_no, medical_record_no, employee_no) VALUES
+INSERT INTO admission (admission_no, admit_at, discharge_at, adm_status, bed_no, medical_record_no) VALUES
 ('H20261006-007', '2026-10-06 09:30:00', '2026-10-11 11:00:00', '퇴원',
- '5103-2', 'P2025004871', 'MR20261005-0033', 'E10034');
+ '5103-2', 'MR20261005-0033');
 
 
 -- ---------------------------------------------------------------------
@@ -363,9 +363,9 @@ INSERT INTO test (test_no, tested_at, test_result, applied_price,
  'MR20261005-0035', 'T1050');
 
 INSERT INTO admission (admission_no, admit_at, discharge_at, adm_status,
-                       bed_no, patient_no, medical_record_no, employee_no) VALUES
+                       bed_no, medical_record_no) VALUES
 ('H20261005-009', '2026-10-05 13:00:00', NULL, '입원중',
- '5103-1', 'P2026000098', 'MR20261005-0035', 'E10021');
+ '5103-1', 'MR20261005-0035');
 
 INSERT INTO payment (payment_no, consult_amount, test_amount, drug_amount, room_amount,
                      total_amount, patient_amount, pay_method, paid_at,

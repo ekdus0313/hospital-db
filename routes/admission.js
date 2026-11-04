@@ -45,7 +45,8 @@ router.get('/beds', async (req, res) => {
     JOIN      room      r ON r.room_no    = b.room_no
     LEFT JOIN admission a ON a.bed_no     = b.bed_no
                          AND a.adm_status = '입원중'
-    LEFT JOIN patient   p ON p.patient_no = a.patient_no
+    LEFT JOIN medical_record mr ON mr.medical_record_no = a.medical_record_no
+    LEFT JOIN patient        p  ON p.patient_no         = mr.patient_no
     ORDER BY  b.bed_no
   `);
 
