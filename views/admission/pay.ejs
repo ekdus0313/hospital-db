@@ -1,0 +1,42 @@
+<%- include('../layout/header', { title: '진료비 계산', subtitle: bill.medical_record_no + ' · ' + bill.patient_name + ' · ' + bill.treated_at }) %>
+
+  <% if (err) { %>
+    <div class="alert alert--danger" role="alert"><%= err %></div>
+  <% } %>
+
+  <table>
+    <tbody>
+      <tr><th>진찰료</th><td><%= Number(bill.consult_amount).toLocaleString() %>원</td></tr>
+      <tr><th>검사료</th><td><%= Number(bill.test_amount).toLocaleString() %>원</td></tr>
+      <tr><th>약제료</th><td><%= Number(bill.drug_amount).toLocaleString() %>원</td></tr>
+      <tr><th>병실료</th><td><%= Number(bill.room_amount).toLocaleString() %>원</td></tr>
+      <tr><th>청구금액</th><td><b><%= Number(bill.total_amount).toLocaleString() %>원</b></td></tr>
+      <tr><th>본인부담금 (<%= bill.insurance_name %> <%= bill.copay_rate %>%)</th>
+          <td><b><%= Number(bill.patient_amount).toLocaleString() %>원</b></td></tr>
+    </tbody>
+  </table>
+
+  <% if (bill.adm_status === '입원중') { %>
+    <p class="alert alert--danger">입원 중인 환자입니다. 병실료가 정해지지 않아 퇴원 처리 후 수납할 수 있습니다.</p>
+    <p><a class="btn btn--secondary" href="/admission/inpatients">입원 현황으로</a></p>
+  <% } else if (bill.pay_status === '완료') { %>
+    <p class="alert">이미 수납이 끝난 진료입니다.</p>
+  <% } else { %>
+    <form class="form" method="POST" action="/admission/payments/<%= bill.medical_record_no %>">
+      <label class="field">
+        <span>결제수단 <span class="req">*</span></span>
+        <select name="pay_method" required>
+          <option value="">결제수단을 고르세요</option>
+          <% methods.forEach(function (m) { %>
+            <option value="<%= m %>"><%= m %></option>
+          <% }) %>
+        </select>
+      </label>
+      <div class="form__actions">
+        <a class="btn btn--secondary" href="/admission/payments">수납 대상으로</a>
+        <button type="submit" class="btn btn--primary">수납 완료</button>
+      </div>
+    </form>
+  <% } %>
+
+<%- include('../layout/footer') %>

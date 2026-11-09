@@ -1,6 +1,11 @@
-<%- include('../layout/header', { title: '수납 대상 목록' }) %>
+<%- include('../layout/header', { title: '수납 대상 목록', subtitle: '아직 수납하지 않은 진료입니다. 금액은 수납 버튼을 누르면 지금 기준으로 다시 계산됩니다.' }) %>
 
-  <h1>수납 대상 목록</h1>
+  <% if (typeof msg !== 'undefined' && msg) { %>
+    <div class="alert" role="status"><%= msg %></div>
+  <% } %>
+  <% if (typeof err !== 'undefined' && err) { %>
+    <div class="alert alert--danger" role="alert"><%= err %></div>
+  <% } %>
 
   <% if (rows.length === 0) { %>
     <p>수납할 진료가 없습니다.</p>
@@ -17,6 +22,7 @@
           <th>본인부담금</th>
           <th>수납상태</th>
           <th>비고</th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
@@ -37,6 +43,11 @@
                 진료비 계산 전
               <% } else { %>
                 -
+              <% } %>
+            </td>
+            <td>
+              <% if (user && user.role === '원무' && r.adm_status !== '입원중') { %>
+                <a class="btn btn--primary btn--sm" href="/admission/payments/<%= r.medical_record_no %>">수납</a>
               <% } %>
             </td>
           </tr>

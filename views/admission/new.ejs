@@ -1,0 +1,52 @@
+<%- include('../layout/header', { title: '입원 수속', subtitle: '입원 근거가 되는 진료기록과 빈 병상을 고릅니다. 환자와 주치의는 진료기록에서 정해집니다.' }) %>
+
+  <% if (err) { %>
+    <div class="alert alert--danger" role="alert"><%= err %></div>
+  <% } %>
+
+  <% if (records.length === 0) { %>
+    <p>입원 처리할 수 있는 진료가 없습니다.</p>
+    <p class="hint">이미 입원한 진료, 수납이 끝난 진료, 지금 입원 중인 환자의 진료는 목록에 나오지 않습니다.</p>
+  <% } else if (beds.length === 0) { %>
+    <p>비어 있는 병상이 없습니다.</p>
+  <% } else { %>
+    <form class="form" method="POST" action="/admission/new">
+      <fieldset class="formsec">
+        <legend class="formsec__head">
+          <span class="formsec__no">01</span>
+          <b>입원 정보</b>
+          <small>병상은 '사용가능'인 것만 나옵니다.</small>
+        </legend>
+        <div class="formsec__body">
+          <label class="field field--full">
+            <span>입원 근거 진료 <span class="req">*</span></span>
+            <select name="medical_record_no" required>
+              <option value="">진료를 고르세요</option>
+              <% records.forEach(function (r) { %>
+                <option value="<%= r.medical_record_no %>">
+                  <%= r.medical_record_no %> · <%= r.patient_name %> · <%= r.treated_at %> · 담당 <%= r.employee_name %>
+                </option>
+              <% }) %>
+            </select>
+          </label>
+          <label class="field field--full">
+            <span>배정 병상 <span class="req">*</span></span>
+            <select name="bed_no" required>
+              <option value="">병상을 고르세요</option>
+              <% beds.forEach(function (b) { %>
+                <option value="<%= b.bed_no %>">
+                  <%= b.bed_no %> · <%= b.room_type %> · 1일 <%= Number(b.daily_fee).toLocaleString() %>원
+                </option>
+              <% }) %>
+            </select>
+          </label>
+        </div>
+      </fieldset>
+      <div class="form__actions">
+        <a class="btn btn--secondary" href="/admission/inpatients">입원 현황</a>
+        <button type="submit" class="btn btn--primary">입원 처리</button>
+      </div>
+    </form>
+  <% } %>
+
+<%- include('../layout/footer') %>
