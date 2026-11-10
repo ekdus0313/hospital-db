@@ -74,6 +74,19 @@ app.get('/', async (req, res) => {
   res.render('index', { home });
 });
 
+// 없는 주소 — 메인 화면으로 돌려보낸다
+app.use((req, res) => {
+  res.status(404).render('index', { home: null });
+});
+
+// 마지막 그물 — 어느 라우터에서도 처리하지 못한 오류가 여기로 온다.
+// 이게 없으면 Express 기본 오류 화면이 떠서 파일 경로와 SQL 이 그대로 보인다.
+// ※ 인자가 네 개여야 Express 가 오류 처리기로 인식한다. next 를 안 써도 적는다.
+app.use((err, req, res, next) => {
+  console.error('처리되지 않은 오류:', err);
+  res.status(500).send('요청을 처리하는 중 문제가 생겼습니다. 잠시 후 다시 시도해 주세요.');
+});
+
 app.listen(PORT, async () => {
   console.log(`Server is running on http://localhost:${PORT}`);
   try {
