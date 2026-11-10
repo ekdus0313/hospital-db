@@ -10,6 +10,9 @@
   - subtitle : 제목 아래 한 줄 설명 (없어도 됨)
   - variant  : 'home' 이면 메인 화면용 큰 머리 띠, 'auth' 면 로그인·회원가입용 좁은 화면
 
+  저장·취소 뒤 알림은 라우터에서 req.session.flash = { type, text } 를 넣고
+  redirect 하면 본문 맨 위에 자동으로 한 번 표시된다. (app.js 참고)
+
   user, menu, roleLabel, currentPath 는 app.js 공통 미들웨어가 넘겨 준다.
   =====================================================
 %>
@@ -22,6 +25,7 @@
   const _subtitle = typeof subtitle !== 'undefined' && subtitle ? subtitle : '';
   const _variant  = typeof variant !== 'undefined' ? variant : '';
   const _heroHtml = typeof heroActions !== 'undefined' ? heroActions : '';
+  const _flash    = typeof flash !== 'undefined' && flash ? flash : null;
 
   // 제목에 줄바꿈(\n)을 쓸 수 있게 — 글자는 먼저 안전하게 바꾼다(HTML 주입 방지)
   const _esc = v => String(v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -96,3 +100,6 @@
 
   <main class="content wrap <%= _variant ? 'content--' + _variant : '' %>">
     <div class="sheet">
+      <% if (_flash) { %>
+        <div class="alert alert--<%= ['ok', 'danger', 'warn', 'info'].includes(_flash.type) ? _flash.type : 'info' %>" role="alert"><%= _flash.text %></div>
+      <% } %>
