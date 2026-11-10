@@ -1,0 +1,53 @@
+<%- include('../layout/header', { title: '입원 현황', subtitle: '지금 입원 중인 환자입니다. 퇴원하면 병상이 비고 수납 대상으로 넘어갑니다.' }) %>
+
+  <% if (msg) { %>
+    <div class="alert" role="status"><%= msg %></div>
+  <% } %>
+  <% if (err) { %>
+    <div class="alert alert--danger" role="alert"><%= err %></div>
+  <% } %>
+
+  <% if (rows.length === 0) { %>
+    <p>입원 중인 환자가 없습니다.</p>
+  <% } else { %>
+    <table>
+      <thead>
+        <tr>
+          <th>입원번호</th>
+          <th>환자</th>
+          <th>주치의</th>
+          <th>병상</th>
+          <th>유형</th>
+          <th>입원일시</th>
+          <th>재원일수(오늘까지)</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% rows.forEach(function (r) { %>
+          <tr>
+            <td><%= r.admission_no %></td>
+            <td><%= r.patient_name %></td>
+            <td><%= r.doctor_name %></td>
+            <td><%= r.bed_no %></td>
+            <td><%= r.room_type %></td>
+            <td><%= r.admit_at %></td>
+            <td><%= r.days_so_far %>일</td>
+            <td>
+              <% if (user && user.role === '원무') { %>
+                <form method="POST" action="/admission/<%= r.admission_no %>/discharge" class="inline-form">
+                  <button type="submit" class="btn btn--secondary btn--sm">퇴원</button>
+                </form>
+              <% } %>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+
+  <% if (user && user.role === '원무') { %>
+    <p><a class="btn btn--primary" href="/admission/new">입원 수속</a></p>
+  <% } %>
+
+<%- include('../layout/footer') %>
