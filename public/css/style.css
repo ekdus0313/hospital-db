@@ -219,6 +219,10 @@ th:last-child,  td:last-child  { padding-right: 4px; }
 .btn--ghostDark { background: transparent; color: #fff; border-color: rgba(255,255,255,0.35); }
 .btn--ghostDark:hover { border-color: #fff; color: #fff; }
 .btn--sm { height: 34px; padding: 0 14px; font-size: 13px; }
+.btn--danger    { background: transparent; color: var(--danger); border-color: #E3B7B7; }   /* 취소·삭제처럼 되돌리기 어려운 동작 */
+.btn--danger:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn:disabled   { opacity: .45; cursor: not-allowed; }
+.col-action     { width: 1%; white-space: nowrap; text-align: right; }
 
 .linkbtn {
   background: none; border: 1px solid var(--line); color: var(--text-sub); border-radius: 6px;
@@ -344,6 +348,9 @@ button { font-family: inherit; }
   padding: 12px 16px; margin: 0 0 22px; font-size: 14px;
 }
 .alert--danger { color: var(--danger); border-color: #EBC9C9; border-left-color: var(--danger); background: #FBF3F3; }
+.alert--ok     { color: var(--ok);     border-color: #C6E0D3; border-left-color: var(--ok);     background: #F1F8F4; }
+.alert--warn   { color: var(--warn);   border-color: #ECD9B8; border-left-color: var(--warn);   background: #FBF6EC; }
+.alert--info   { color: var(--info);   border-color: #C9D6E8; border-left-color: var(--info);   background: #F2F6FB; }
 
 /* 입력 칸 묶음: 라벨 위, 입력 아래 */
 .form { margin: 0; }

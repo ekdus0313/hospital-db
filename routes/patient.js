@@ -2,6 +2,7 @@
 // routes/patient.js — 환자용 화면 3개 (조원5)
 //
 //   /patient/reservations  내 예약       (화면 P-02, R-0007·R-0009)
+//     POST /patient/reservations/:no/cancel  내 예약 취소 (8·9주차)
 //   /patient/records       내 진료 이력  (화면 P-06, R-0014·R-0017·R-0021)
 //   /patient/payments      내 수납 내역  (화면 P-08, R-0028)
 //
@@ -28,7 +29,8 @@ router.get('/reservations', requireRole('patient'), async (req, res) => {
              e.employee_name,
              r.reservation_type,
              r.reservation_status,
-             r.waiting_no
+             r.waiting_no,
+             (r.reservation_status = '예약' AND r.reserved_at > NOW()) AS can_cancel
       FROM      reservation      r
       JOIN      medical_schedule s ON s.schedule_no = r.schedule_no
       JOIN      employee         e ON e.employee_no = s.employee_no
@@ -46,6 +48,61 @@ router.get('/reservations', requireRole('patient'), async (req, res) => {
   } catch (err) {
     console.error('내 예약 조회 오류:', err);
     res.status(500).send('예약 목록을 불러오는 중 오류가 발생했습니다.');
+  }
+});
+
+
+// ── 내 예약 취소 (8·9주차) ──────────────────────────
+// 취소는 삭제가 아니라 상태를 '취소'로 바꾸고 취소일시를 남긴다 (예약 테이블 규칙).
+// 막는 경우 (9주차)
+//   ① 내 예약이 아님 (남의 예약번호를 주소에 넣은 경우 포함)
+//   ② 이미 접수·진료완료·취소된 예약 — 접수된 예약은 취소할 수 없다
+//   ③ 진료 시각이 이미 지난 예약
+router.post('/reservations/:no/cancel', requireRole('patient'), async (req, res) => {
+  const patientNo     = req.session.user.patient_no;
+  const reservationNo = req.params.no;
+  const done = (type, text) => {
+    req.session.flash = { type, text };
+    req.session.save(() => res.redirect('/patient/reservations'));
+  };
+
+  try {
+    // 먼저 조회해서 취소할 수 있는 예약인지 확인한다.
+    const [rows] = await db.query(`
+      SELECT reservation_status,
+             reserved_at <= NOW() AS is_past
+      FROM   reservation
+      WHERE  reservation_no = ? AND patient_no = ?
+    `, [reservationNo, patientNo]);
+
+    if (rows.length === 0) {
+      return done('danger', '취소할 수 있는 예약을 찾지 못했습니다.');
+    }
+    if (rows[0].reservation_status !== '예약') {
+      return done('danger', `이미 '${rows[0].reservation_status}' 상태인 예약은 취소할 수 없습니다.`);
+    }
+    if (rows[0].is_past) {
+      return done('danger', '진료 시간이 지난 예약은 취소할 수 없습니다.');
+    }
+
+    // WHERE 에 조건을 한 번 더 걸어 두면, 그 사이 원무과에서 접수했더라도
+    // 접수된 예약이 취소로 바뀌는 일이 없다 (바뀐 행이 0개면 실패).
+    const [result] = await db.query(`
+      UPDATE reservation
+      SET    reservation_status = '취소',
+             canceled_at        = NOW()
+      WHERE  reservation_no = ? AND patient_no = ?
+        AND  reservation_status = '예약'
+        AND  reserved_at > NOW()
+    `, [reservationNo, patientNo]);
+
+    if (result.affectedRows === 0) {
+      return done('danger', '예약 상태가 바뀌어 취소하지 못했습니다. 목록을 다시 확인해 주세요.');
+    }
+    done('ok', '예약을 취소했습니다.');
+  } catch (err) {
+    console.error('예약 취소 오류:', err);
+    done('danger', '예약을 취소하는 중 문제가 생겼습니다. 잠시 후 다시 시도해 주세요.');
   }
 });
 

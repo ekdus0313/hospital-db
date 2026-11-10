@@ -27,6 +27,7 @@
           <th>상태</th>
           <th class="num">대기번호</th>
           <th>예약번호</th>
+          <th class="col-action"></th>
         </tr>
       </thead>
       <tbody>
@@ -39,12 +40,20 @@
             <td><span class="tag tag--<%= tag(r.reservation_status) %>"><%= r.reservation_status %></span></td>
             <td class="num"><%= r.waiting_no === null ? '–' : r.waiting_no %></td>
             <td class="code"><%= r.reservation_no %></td>
+            <td class="col-action">
+              <% if (r.can_cancel) { %>
+                <form method="post" action="/patient/reservations/<%= r.reservation_no %>/cancel" class="inline-form"
+                      onsubmit="return confirm('<%= r.reserved_at %> <%= r.dept_name %> 예약을 취소할까요?');">
+                  <button type="submit" class="btn btn--danger btn--sm">예약 취소</button>
+                </form>
+              <% } %>
+            </td>
           </tr>
         <% }) %>
       </tbody>
     </table>
   </div>
-  <p class="note">취소한 예약도 지워지지 않고 ‘취소’로 남습니다.</p>
+  <p class="note">진료 시간 전이고 아직 접수되지 않은 예약만 취소할 수 있습니다. 취소한 예약도 지워지지 않고 ‘취소’로 남습니다.</p>
 <% } %>
 
 <%- include('../layout/footer') %>

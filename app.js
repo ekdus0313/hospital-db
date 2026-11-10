@@ -44,6 +44,12 @@ app.use((req, res, next) => {
   res.locals.menu        = menuFor(res.locals.user);       // 역할별 메뉴
   res.locals.roleLabel   = roleLabelFor(res.locals.user);  // 머리말의 역할 이름
   res.locals.currentPath = req.path;                       // 지금 보고 있는 메뉴 강조용
+
+  // 저장·취소 결과 알림 (조원5) — 한 번 보여 주고 지운다.
+  //   쓰는 법: req.session.flash = { type: 'ok', text: '저장했습니다.' };  →  res.redirect(...)
+  //   type: 'ok'(초록) · 'danger'(빨강) · 'warn'(주황) · 'info'(파랑)
+  res.locals.flash = req.session.flash || null;
+  delete req.session.flash;
   next();
 });
 
