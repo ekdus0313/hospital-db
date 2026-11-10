@@ -1,0 +1,28 @@
+<%- include('../layout/header', { title: '진료기록 작성' }) %>
+
+  <h1>진료기록 작성</h1>
+
+  <p>
+    <strong><%= info.patient_name %></strong>
+    (<%= info.patient_no %>) · 접수 <%= info.reception_at %>
+  </p>
+
+  <form method="post" action="/treatment/record">
+    <input type="hidden" name="reservation_no" value="<%= info.reservation_no %>">
+    <input type="hidden" name="patient_no"     value="<%= info.patient_no %>">
+
+    <p>
+      <label for="symptom">증상</label><br>
+      <input type="text" id="symptom" name="symptom" style="width:600px;" required>
+    </p>
+
+    <p>
+      <label for="opinion">소견</label><br>
+      <textarea id="opinion" name="opinion" rows="6" style="width:600px;"></textarea>
+    </p>
+
+    <button type="submit">저장</button>
+    <a href="/treatment/doctor" style="margin-left:10px;">취소</a>
+  </form>
+
+<%- include('../layout/footer') %>

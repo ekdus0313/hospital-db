@@ -36,7 +36,9 @@
       <tbody>
         <% rows.forEach(function (r) { %>
           <tr>
-            <td><%= r.medical_record_no %></td>
+            <td>
+              <a href="/treatment/record/<%= r.medical_record_no %>"><%= r.medical_record_no %></a>
+            </td>
             <td><%= r.treated_at %></td>
             <td><%= r.dept_name %></td>
             <td><%= r.employee_name %></td>
