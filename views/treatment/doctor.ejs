@@ -11,7 +11,7 @@
     <% } %>
   </form>
 
-    <% if (rows.length === 0) { %>
+  <% if (rows.length === 0) { %>
     <p><%= date %> 에 접수된 환자가 없습니다.</p>
   <% } else { %>
     <table>
@@ -23,6 +23,7 @@
           <th>환자</th>
           <th>진료과</th>
           <th>담당의사</th>
+          <th>진료</th>
         </tr>
       </thead>
       <tbody>
@@ -34,6 +35,9 @@
             <td><%= r.patient_name %></td>
             <td><%= r.dept_name %></td>
             <td><%= r.employee_name %></td>
+            <td>
+              <a href="/treatment/record/new?reservation=<%= r.reservation_no %>">진료 시작</a>
+            </td>
           </tr>
         <% }) %>
       </tbody>

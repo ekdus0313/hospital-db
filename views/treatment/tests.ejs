@@ -2,6 +2,12 @@
 
   <h1>검사 목록</h1>
 
+  <% if (error) { %>
+    <p style="color:#c0392b;"><%= error %></p>
+  <% } %>
+
+  <% const isLab = user && user.role === '검사실'; %>
+
   <% if (rows.length === 0) { %>
     <p>검사 내역이 없습니다.</p>
   <% } else { %>
@@ -16,6 +22,9 @@
           <th>검사일시</th>
           <th>결과</th>
           <th>검사비</th>
+          <% if (isLab) { %>
+            <th>결과 입력</th>
+          <% } %>
         </tr>
       </thead>
       <tbody>
@@ -29,9 +38,32 @@
             <td><%= r.tested_at === null ? '-' : r.tested_at %></td>
             <td><%= r.test_result === null ? '-' : r.test_result %></td>
             <td><%= r.applied_price.toLocaleString() %></td>
+
+            <% if (isLab) { %>
+              <td>
+                <% if (r.test_status === '지시') { %>
+                  <form method="post" action="/treatment/test/result">
+                    <input type="hidden" name="test_no" value="<%= r.test_no %>">
+                    <input type="text" name="test_result"
+                           placeholder="예) 12.1 g/dL"
+                           maxlength="255" style="width:180px;" required>
+                    <button type="submit">저장</button>
+                  </form>
+                <% } else { %>
+                  -
+                <% } %>
+              </td>
+            <% } %>
           </tr>
         <% }) %>
       </tbody>
     </table>
   <% } %>
+
+  <% if (!isLab) { %>
+    <p style="margin-top:12px;color:#666;font-size:13px;">
+      검사 결과 입력은 검사실 계정으로 로그인해야 보입니다.
+    </p>
+  <% } %>
+
 <%- include('../layout/footer') %>

@@ -1,0 +1,186 @@
+<%- include('../layout/header', { title: '진료기록' }) %>
+
+  <h1>진료기록 <%= record.medical_record_no %></h1>
+
+  <p>
+    <strong><%= record.patient_name %></strong> (<%= record.patient_no %>)
+    · <%= record.treated_at %> · <%= record.employee_name %>
+  </p>
+  <p>증상 : <%= record.symptom %></p>
+  <p>소견 : <%= record.opinion || '-' %></p>
+
+  <% if (error) { %>
+    <p style="color:#c0392b;"><%= error %></p>
+  <% } %>
+
+  <hr>
+
+  <h2>진단</h2>
+
+  <% if (diagnoses.length === 0) { %>
+    <p>등록된 진단이 없습니다.</p>
+  <% } else { %>
+    <table>
+      <thead>
+        <tr>
+          <th>구분</th>
+          <th>질병코드</th>
+          <th>질병명</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% diagnoses.forEach(function (d) { %>
+          <tr>
+            <td><%= d.diagnosis_type %></td>
+            <td><%= d.disease_code %></td>
+            <td><%= d.disease_name %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+
+  <form method="post" action="/treatment/diagnosis" style="margin-top:14px;">
+    <input type="hidden" name="medical_record_no" value="<%= record.medical_record_no %>">
+
+    <select name="disease_code" required>
+      <option value="">질병을 고르세요</option>
+      <% diseases.forEach(function (d) { %>
+        <option value="<%= d.disease_code %>">
+          <%= d.disease_code %> · <%= d.disease_name %>
+        </option>
+      <% }) %>
+    </select>
+
+    <select name="diagnosis_type" required>
+      <option value="주진단">주진단</option>
+      <option value="부진단">부진단</option>
+    </select>
+
+    <button type="submit">진단 추가</button>
+  </form>
+
+  <hr>
+
+  <h2>처방</h2>
+
+  <% if (prescriptions.length === 0) { %>
+    <p>등록된 처방이 없습니다.</p>
+  <% } else { %>
+    <table>
+      <thead>
+        <tr>
+          <th>약품명</th>
+          <th>제형</th>
+          <th>1회</th>
+          <th>1일</th>
+          <th>일수</th>
+          <th>적용 단가</th>
+          <th>약제료</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% let drugTotal = 0; %>
+        <% prescriptions.forEach(function (p) { drugTotal += Number(p.amount); %>
+          <tr>
+            <td><%= p.drug_name %></td>
+            <td><%= p.drug_form %></td>
+            <td><%= p.dose_once %></td>
+            <td><%= p.dose_per_day %></td>
+            <td><%= p.dose_days %></td>
+            <td><%= Number(p.applied_price).toLocaleString() %>원</td>
+            <td><%= Number(p.amount).toLocaleString() %>원</td>
+          </tr>
+        <% }) %>
+        <tr>
+          <td colspan="6"><strong>약제료 합계</strong></td>
+          <td><strong><%= drugTotal.toLocaleString() %>원</strong></td>
+        </tr>
+      </tbody>
+    </table>
+  <% } %>
+
+  <form method="post" action="/treatment/prescription" style="margin-top:14px;">
+    <input type="hidden" name="medical_record_no" value="<%= record.medical_record_no %>">
+
+    <select name="drug_code" required>
+      <option value="">약품을 고르세요</option>
+      <% drugs.forEach(function (d) { %>
+        <option value="<%= d.drug_code %>">
+          <%= d.drug_name %> (<%= Number(d.unit_price).toLocaleString() %>원)
+        </option>
+      <% }) %>
+    </select>
+
+    1회 <input type="number" name="dose_once"    value="1" min="1" style="width:60px;" required>
+    1일 <input type="number" name="dose_per_day" value="3" min="1" style="width:60px;" required>회
+    <input type="number" name="dose_days"        value="7" min="1" style="width:60px;" required>일분
+
+    <button type="submit">처방 추가</button>
+  </form>
+
+  <hr>
+
+  <h2>검사</h2>
+
+  <% if (tests.length === 0) { %>
+    <p>지시한 검사가 없습니다.</p>
+  <% } else { %>
+    <table>
+      <thead>
+        <tr>
+          <th>상태</th>
+          <th>검사번호</th>
+          <th>검사명</th>
+          <th>분류</th>
+          <th>검사일시</th>
+          <th>결과</th>
+          <th>검사비</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% let testTotal = 0; %>
+        <% tests.forEach(function (t) { testTotal += Number(t.applied_price); %>
+          <tr>
+            <td><%= t.test_status %></td>
+            <td><%= t.test_no %></td>
+            <td><%= t.test_name %></td>
+            <td><%= t.test_category %></td>
+            <td><%= t.tested_at === null ? '-' : t.tested_at %></td>
+            <td><%= t.test_result === null ? '-' : t.test_result %></td>
+            <td><%= Number(t.applied_price).toLocaleString() %>원</td>
+          </tr>
+        <% }) %>
+        <tr>
+          <td colspan="6"><strong>검사료 합계</strong></td>
+          <td><strong><%= testTotal.toLocaleString() %>원</strong></td>
+        </tr>
+      </tbody>
+    </table>
+  <% } %>
+
+  <form method="post" action="/treatment/test" style="margin-top:14px;">
+    <input type="hidden" name="medical_record_no" value="<%= record.medical_record_no %>">
+
+    <select name="test_code" required>
+      <option value="">검사항목을 고르세요</option>
+      <% testItems.forEach(function (t) { %>
+        <option value="<%= t.test_code %>">
+          [<%= t.test_category %>] <%= t.test_name %>
+          (<%= Number(t.test_price).toLocaleString() %>원)
+        </option>
+      <% }) %>
+    </select>
+
+    <button type="submit">검사 지시</button>
+  </form>
+
+  <p style="margin-top:8px;color:#666;font-size:13px;">
+    검사 결과는 검사실에서 입력합니다.
+  </p>
+
+  <p style="margin-top:24px;">
+    <a href="/treatment/history?patient=<%= record.patient_no %>">진료 이력으로</a>
+  </p>
+
+<%- include('../layout/footer') %>
