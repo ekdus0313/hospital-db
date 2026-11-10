@@ -2,10 +2,6 @@
 
   <h1>검사 목록</h1>
 
-  <% if (error) { %>
-    <p style="color:#c0392b;"><%= error %></p>
-  <% } %>
-
   <% const isLab = user && user.role === '검사실'; %>
 
   <% if (rows.length === 0) { %>
