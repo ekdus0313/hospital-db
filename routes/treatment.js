@@ -17,6 +17,7 @@
 //   · 테이블 두 개를 같이 바꾸는 저장은 트랜잭션으로 묶는다 (둘 다 되거나 둘 다 안 되거나)
 //   · 번호는 같은 날 마지막 번호 + 1, 트랜잭션 안에서 잠그고 읽는다
 //   · 화면에서 받은 값을 믿지 않는다 — 환자번호는 예약에서 다시 찾는다
+//   · 수납이 끝난 진료는 더 이상 금액이 붙는 것을 추가할 수 없다
 //   · 알림은 공통 flash 로 (조원5가 만든 구조)
 // =====================================================
 
@@ -114,50 +115,55 @@ router.get('/doctor', requireRole('의사'), async (req, res) => {
 //    진단은 서브쿼리로 뽑는다. JOIN 으로 가져오면 진단 2건과 처방 3건이
 //    곱해져 6줄이 되기 때문이다.
 router.get('/history', requireRole('의사'), async (req, res) => {
-  const selected = req.query.patient || '';
+  try {
+    const selected = req.query.patient || '';
 
-  const [patients] = await db.query(`
-    SELECT patient_no, patient_name
-    FROM   patient
-    ORDER BY patient_name
-  `);
+    const [patients] = await db.query(`
+      SELECT patient_no, patient_name
+      FROM   patient
+      ORDER BY patient_name
+    `);
 
-  let rows = [];
-  if (selected) {
-    [rows] = await db.query(`
-      SELECT mr.medical_record_no,
-             DATE_FORMAT(mr.treated_at, '%Y-%m-%d %H:%i') AS treated_at,
-             p.patient_name,
-             dp.dept_name,
-             e.employee_name,
-             mr.symptom,
-             (SELECT GROUP_CONCAT(CONCAT(dg.diagnosis_type, ' ', ds.disease_name)
-                                  ORDER BY CASE dg.diagnosis_type
-                                               WHEN '주진단' THEN 1 ELSE 2 END
-                                  SEPARATOR ' / ')
-                FROM diagnosis dg
-                JOIN disease   ds ON ds.disease_code = dg.disease_code
-               WHERE dg.medical_record_no = mr.medical_record_no) AS diagnosis,
-             GROUP_CONCAT(CONCAT(dr.drug_name, ' ',
-                                 pr.dose_once,    '정 ',
-                                 pr.dose_per_day, '회 ',
-                                 pr.dose_days,    '일')
-                          ORDER BY dr.drug_name
-                          SEPARATOR ' / ')                        AS prescription
-      FROM       medical_record mr
-      JOIN       patient      p  ON p.patient_no         = mr.patient_no
-      JOIN       employee     e  ON e.employee_no        = mr.employee_no
-      JOIN       department   dp ON dp.dept_code         = e.dept_code
-      LEFT JOIN  prescription pr ON pr.medical_record_no = mr.medical_record_no
-      LEFT JOIN  drug         dr ON dr.drug_code         = pr.drug_code
-      WHERE      p.patient_no = ?
-      GROUP BY   mr.medical_record_no, mr.treated_at, p.patient_name,
-                 dp.dept_name, e.employee_name, mr.symptom
-      ORDER BY   mr.treated_at DESC
-    `, [selected]);
+    let rows = [];
+    if (selected) {
+      [rows] = await db.query(`
+        SELECT mr.medical_record_no,
+               DATE_FORMAT(mr.treated_at, '%Y-%m-%d %H:%i') AS treated_at,
+               p.patient_name,
+               dp.dept_name,
+               e.employee_name,
+               mr.symptom,
+               (SELECT GROUP_CONCAT(CONCAT(dg.diagnosis_type, ' ', ds.disease_name)
+                                    ORDER BY CASE dg.diagnosis_type
+                                                 WHEN '주진단' THEN 1 ELSE 2 END
+                                    SEPARATOR ' / ')
+                  FROM diagnosis dg
+                  JOIN disease   ds ON ds.disease_code = dg.disease_code
+                 WHERE dg.medical_record_no = mr.medical_record_no) AS diagnosis,
+               GROUP_CONCAT(CONCAT(dr.drug_name, ' ',
+                                   pr.dose_once,    '정 ',
+                                   pr.dose_per_day, '회 ',
+                                   pr.dose_days,    '일')
+                            ORDER BY dr.drug_name
+                            SEPARATOR ' / ')                        AS prescription
+        FROM       medical_record mr
+        JOIN       patient      p  ON p.patient_no         = mr.patient_no
+        JOIN       employee     e  ON e.employee_no        = mr.employee_no
+        JOIN       department   dp ON dp.dept_code         = e.dept_code
+        LEFT JOIN  prescription pr ON pr.medical_record_no = mr.medical_record_no
+        LEFT JOIN  drug         dr ON dr.drug_code         = pr.drug_code
+        WHERE      p.patient_no = ?
+        GROUP BY   mr.medical_record_no, mr.treated_at, p.patient_name,
+                   dp.dept_name, e.employee_name, mr.symptom
+        ORDER BY   mr.treated_at DESC
+      `, [selected]);
+    }
+
+    res.render('treatment/history', { patients, rows, selected });
+  } catch (err) {
+    console.error('진료 이력 조회 오류:', err);
+    res.status(500).send('진료 이력을 불러오는 중 오류가 발생했습니다.');
   }
-
-  res.render('treatment/history', { patients, rows, selected });
 });
 
 
@@ -165,25 +171,30 @@ router.get('/history', requireRole('의사'), async (req, res) => {
 //    아직 결과가 안 나온 '지시' 건을 위로 올린다.
 //    검사일시·검사결과는 지시 시점에 비어 있어서 NULL 이 올 수 있다.
 router.get('/tests', requireRole('의사', '검사실'), async (req, res) => {
-  const [rows] = await db.query(`
-    SELECT t.test_no,
-           t.test_status,
-           DATE_FORMAT(t.tested_at, '%Y-%m-%d %H:%i') AS tested_at,
-           t.test_result,
-           t.applied_price,
-           ti.test_name,
-           ti.test_category,
-           p.patient_name,
-           mr.medical_record_no
-    FROM   test           t
-    JOIN   test_item      ti ON ti.test_code         = t.test_code
-    JOIN   medical_record mr ON mr.medical_record_no = t.medical_record_no
-    JOIN   patient        p  ON p.patient_no         = mr.patient_no
-    ORDER BY CASE t.test_status WHEN '지시' THEN 1 WHEN '완료' THEN 2 ELSE 3 END,
-             t.test_no
-  `);
+  try {
+    const [rows] = await db.query(`
+      SELECT t.test_no,
+             t.test_status,
+             DATE_FORMAT(t.tested_at, '%Y-%m-%d %H:%i') AS tested_at,
+             t.test_result,
+             t.applied_price,
+             ti.test_name,
+             ti.test_category,
+             p.patient_name,
+             mr.medical_record_no
+      FROM   test           t
+      JOIN   test_item      ti ON ti.test_code         = t.test_code
+      JOIN   medical_record mr ON mr.medical_record_no = t.medical_record_no
+      JOIN   patient        p  ON p.patient_no         = mr.patient_no
+      ORDER BY CASE t.test_status WHEN '지시' THEN 1 WHEN '완료' THEN 2 ELSE 3 END,
+               t.test_no
+    `);
 
-  res.render('treatment/tests', { rows });
+    res.render('treatment/tests', { rows });
+  } catch (err) {
+    console.error('검사 목록 조회 오류:', err);
+    res.status(500).send('검사 목록을 불러오는 중 오류가 발생했습니다.');
+  }
 });
 
 
@@ -398,6 +409,7 @@ router.get('/record/:no', requireRole('의사'), async (req, res) => {
 //    (진료번호, 질병코드) 가 복합키라서 같은 병명을 두 번 넣으면
 //    DB 가 거부한다. 그 에러를 메시지로 바꿔 돌려준다.
 //    주진단이 하나뿐이어야 하는 건 DB 가 모르므로 코드에서 먼저 센다.
+//    진단은 금액이 붙지 않으므로 수납 여부는 보지 않는다.
 router.post('/diagnosis', requireRole('의사'), async (req, res) => {
   const { medical_record_no, disease_code, diagnosis_type } = req.body;
   const back = '/treatment/record/' + medical_record_no;
@@ -462,16 +474,23 @@ router.post('/prescription', requireRole('의사'), async (req, res) => {
       return fail('투약량·투여횟수·투약일수는 1 이상의 정수여야 합니다.');
     }
 
-    // 내 진료기록인지 확인
+    // 내 진료기록인지 + 아직 수납 전인지 확인
+    //   수납이 끝난 뒤에 약을 더 넣으면 청구되지 않은 약이 생긴다.
+    //   금액은 수납 시점에 확정되므로 그 뒤로는 바꿀 수 없다.
+    //   (조원4 의 입원 수속도 같은 이유로 수납이 끝난 진료를 거른다)
     const [[mine]] = await db.query(`
-      SELECT 1 AS ok FROM medical_record
+      SELECT (SELECT pay_status FROM payment
+               WHERE medical_record_no = ?) AS pay_status
+      FROM   medical_record
       WHERE  medical_record_no = ? AND employee_no = ?
-    `, [medical_record_no, req.session.user.employee_no]);
-    if (!mine) return fail('본인이 작성한 진료기록이 아닙니다.');
+    `, [medical_record_no, medical_record_no, req.session.user.employee_no]);
+
+    if (!mine)                      return fail('본인이 작성한 진료기록이 아닙니다.');
+    if (mine.pay_status === '완료') return fail('이미 수납이 끝난 진료라 처방을 추가할 수 없습니다.');
 
     // 단종된 약은 처방할 수 없다 + 지금 단가를 가져온다
     const [[drug]] = await db.query(`
-      SELECT unit_price, use_status
+      SELECT drug_name, unit_price, use_status
       FROM   drug
       WHERE  drug_code = ?
     `, [drug_code]);
@@ -485,7 +504,7 @@ router.post('/prescription', requireRole('의사'), async (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?)
     `, [medical_record_no, drug_code, once, perDay, days, drug.unit_price]);
 
-    flashTo(req, res, 'ok', `${drug_code} 처방을 등록했습니다.`, back);
+    flashTo(req, res, 'ok', `${drug.drug_name} 처방을 등록했습니다.`, back);
 
   } catch (err) {
     if (err.code === 'ER_DUP_ENTRY') return fail('이미 처방된 약품입니다.');
@@ -512,13 +531,17 @@ router.post('/test', requireRole('의사'), async (req, res) => {
   try {
     await conn.beginTransaction();
 
-    // 내 진료기록인지 확인하면서 잠근다
+    // 내 진료기록인지 + 아직 수납 전인지 확인하면서 잠근다
     const [mine] = await conn.query(`
-      SELECT 1 AS ok FROM medical_record
+      SELECT (SELECT pay_status FROM payment
+               WHERE medical_record_no = ?) AS pay_status
+      FROM   medical_record
       WHERE  medical_record_no = ? AND employee_no = ?
       FOR UPDATE
-    `, [medical_record_no, req.session.user.employee_no]);
-    if (mine.length === 0) throw new Error('본인이 작성한 진료기록이 아닙니다.');
+    `, [medical_record_no, medical_record_no, req.session.user.employee_no]);
+
+    if (mine.length === 0)             throw new Error('본인이 작성한 진료기록이 아닙니다.');
+    if (mine[0].pay_status === '완료') throw new Error('이미 수납이 끝난 진료라 검사를 지시할 수 없습니다.');
 
     // 중단된 검사항목은 지시할 수 없다 + 지금 가격을 가져온다
     const [item] = await conn.query(`

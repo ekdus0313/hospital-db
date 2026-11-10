@@ -1,7 +1,5 @@
 <%- include('../layout/header', { title: '검사 목록' }) %>
 
-  <h1>검사 목록</h1>
-
   <% const isLab = user && user.role === '검사실'; %>
 
   <% if (rows.length === 0) { %>

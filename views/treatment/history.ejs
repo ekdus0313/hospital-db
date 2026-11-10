@@ -1,7 +1,5 @@
 <%- include('../layout/header', { title: '진료 이력 조회' }) %>
 
-  <h1>진료 이력 조회</h1>
-
   <form method="get" action="/treatment/history">
     <label>환자
       <select name="patient" onchange="this.form.submit()">

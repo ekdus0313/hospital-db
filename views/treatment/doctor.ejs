@@ -1,7 +1,5 @@
 <%- include('../layout/header', { title: '대기 환자 목록' }) %>
 
-  <h1>대기 환자 목록</h1>
-
   <form method="get" action="/treatment/doctor" style="margin: 14px 0;">
     <label for="date">접수일자 </label>
     <input type="date" id="date" name="date" value="<%= date %>">
