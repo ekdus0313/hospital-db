@@ -1,7 +1,5 @@
 <%- include('../layout/header', { title: '예약 목록' }) %>
 
-  <h1>예약 목록</h1>
-
   <% if (rows.length === 0) { %>
     <p>예약 내역이 없습니다.</p>
   <% } else { %>
@@ -16,6 +14,7 @@
           <th>예약구분</th>
           <th>상태</th>
           <th>대기번호</th>
+          <th>처리</th>
         </tr>
       </thead>
       <tbody>
@@ -29,6 +28,18 @@
             <td><%= r.reservation_type %></td>
             <td><%= r.reservation_status %></td>
             <td><%= r.waiting_no === null ? '-' : r.waiting_no %></td>
+            <td>
+              <% if (r.reservation_status === '예약') { %>
+                <form class="inline-form" method="post" action="/reservation/<%= r.reservation_no %>/reception">
+                  <button type="submit" class="btn btn--primary btn--sm">접수</button>
+                </form>
+                <form class="inline-form" method="post" action="/reservation/<%= r.reservation_no %>/cancel">
+                  <button type="submit" class="btn btn--secondary btn--sm">취소</button>
+                </form>
+              <% } else { %>
+                -
+              <% } %>
+            </td>
           </tr>
         <% }) %>
       </tbody>
