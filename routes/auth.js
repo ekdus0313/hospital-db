@@ -617,5 +617,213 @@ router.get(
     }
 );
 
+// 내 정보 수정 화면
+router.get('/profile', requireRole('patient'), async (req, res) => {
+    try {
+        const patientNo = req.session.user.patient_no;
+        const [patients] = await db.query(`
+            SELECT
+                patient_name,
+                username,
+                phone,
+                zip_code,
+                address1,
+                address2,
+                address3
+            FROM patient
+            WHERE patient_no = ?
+        `, [patientNo]);
+
+        if (patients.length === 0) {
+            return res.status(404).send(
+                '환자 정보를 찾을 수 없습니다.'
+            );
+        }
+        return res.render('auth/profile', {
+            patient: patients[0],
+            error: null,
+            success: req.query.success === '1'
+                ? '회원정보가 수정되었습니다.'
+                : null
+        });
+    } catch (err) {
+        console.error('정보 조회 오류:', err);
+        return res.status(500).send(
+            '정보를 불러오는 중 오류가 발생했습니다.'
+        );
+    }
+});
+
+router.post('/profile', requireRole('patient'), async (req, res) => {
+    try {
+        const patientNo = req.session.user.patient_no;
+        const {
+            phone,
+            zip_code,
+            address1,
+            address2,
+            address3
+        } = req.body;
+        if (
+            typeof phone !== 'string' ||
+            !/^[0-9-]{9,20}$/.test(phone) ||
+            typeof zip_code !== 'string' ||
+            !/^[0-9]{5}$/.test(zip_code) ||
+            typeof address1 !== 'string' ||
+            !address1.trim() ||
+            address1.length > 255 ||
+            (address2 != null &&
+                (typeof address2 !== 'string' ||
+                address2.length > 255)) ||
+            (address3 != null &&
+                (typeof address3 !== 'string' ||
+                address3.length > 255))
+        ) {
+            return res.status(400).send(
+                '입력값을 확인해주세요.'
+            );
+        }
+        const [result] = await db.query(`
+            UPDATE patient
+            SET
+                phone = ?,
+                zip_code = ?,
+                address1 = ?,
+                address2 = ?,
+                address3 = ?
+            WHERE patient_no = ?
+        `, [
+            phone,
+            zip_code,
+            address1.trim(),
+            address2 || null,
+            address3 || null,
+            patientNo
+        ]);
+        if (result.affectedRows === 0) {
+            return res.status(404).send(
+                '환자 정보를 찾을 수 없습니다.'
+            );
+        }
+        return res.redirect('/auth/profile?success=1');
+    } catch (err) {
+        console.error('정보 수정 오류:', err);
+
+        return res.status(500).send(
+            '정보 수정 중 오류가 발생했습니다.'
+        );
+    }
+});
+// 비밀번호 변경 화면
+router.get('/change-password', requireRole('patient'), (req, res) => {
+    return res.render('auth/change-password', {
+        error: null,
+        success: null
+    });
+})
+router.post('/change-password', requireRole('patient'), async (req, res) => {
+    const {
+        currentPassword,
+        newPassword,
+        confirmPassword
+    } = req.body;
+    try {
+        const patientNo = req.session.user.patient_no;
+        if (
+            typeof currentPassword !== 'string' ||
+            typeof newPassword !== 'string' ||
+            typeof confirmPassword !== 'string' ||
+            !currentPassword ||
+            !newPassword ||
+            !confirmPassword
+        ) {
+            return res.status(400).render('auth/change-password', {
+                error: '모든 항목을 입력해주세요.',
+                success: null
+            });
+        }
+        if (
+            newPassword.length < 8 ||
+            Buffer.byteLength(newPassword, 'utf8') > 72
+        ) {
+            return res.status(400).render('auth/change-password', {
+                error: '새 비밀번호는 8자 이상, 72바이트 이하로 입력해주세요.',
+                success: null
+            });
+        }
+        if (newPassword !== confirmPassword) {
+            return res.status(400).render('auth/change-password', {
+                error: '새 비밀번호가 일치하지 않습니다.',
+                success: null
+            });
+        }
+        const [patients] = await db.query(`
+            SELECT password
+            FROM patient
+            WHERE patient_no = ?
+        `, [patientNo]);
+
+        if (patients.length === 0) {
+            return res.status(404).render('auth/change-password', {
+                error: '환자 정보를 찾을 수 없습니다.',
+                success: null
+            });
+        }
+        const validPassword = await bcrypt.compare(
+            currentPassword,
+            patients[0].password
+        );
+        if (!validPassword) {
+            return res.status(400).render('auth/change-password', {
+                error: '현재 비밀번호가 올바르지 않습니다.',
+                success: null
+            });
+        }
+        const samePassword = await bcrypt.compare(
+            newPassword,
+            patients[0].password
+        );
+
+        if (samePassword) {
+            return res.status(400).render('auth/change-password', {
+                error: '기존 비밀번호와 다른 비밀번호를 입력해주세요.',
+                success: null
+            });
+        }
+        const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+        const [result] = await db.query(`
+            UPDATE patient
+            SET password = ?
+            WHERE patient_no = ?
+            AND password = ?
+        `, [
+            hashedPassword,
+            patientNo,
+            patients[0].password
+        ]);
+
+        if (result.affectedRows === 0) {
+            return res.status(409).render('auth/change-password', {
+                error: '비밀번호가 변경되었습니다. 다시 시도해주세요.',
+                success: null
+            });
+        }
+
+        return res.render('auth/change-password', {
+            error: null,
+            success: '비밀번호가 성공적으로 변경되었습니다.'
+        });
+
+    } catch (err) {
+        console.error('비밀번호 변경 오류:', err);
+
+        return res.status(500).render('auth/change-password', {
+            error: '비밀번호 변경 중 오류가 발생했습니다.',
+            success: null
+        });
+    }
+});
+
 module.exports = router;
 module.exports.requireRole = requireRole;
