@@ -1,0 +1,143 @@
+
+<%# views/auth/profile.ejs — 내 정보 수정 %>
+<%- include('../layout/header', {
+  title: '내 정보 수정',
+  subtitle: '연락처와 주소 정보를 변경할 수 있습니다.'
+}) %>
+
+<div class="sheet-head">
+  <p class="muted">
+    <span class="req">*</span> 표시는 필수 입력 항목입니다.
+  </p>
+</div>
+
+<% if (error) { %>
+  <div class="alert alert--danger" role="alert">
+    <%= error %>
+  </div>
+<% } %>
+
+<% if (success) { %>
+  <div class="alert alert--ok" role="alert">
+    <%= success %>
+  </div>
+<% } %>
+
+<form action="/auth/profile" method="POST" class="form">
+
+  <fieldset class="formsec">
+    <legend class="formsec__head">
+      <span class="formsec__no">01</span>
+      <b>계정 정보</b>
+      <small>이름과 아이디는 수정할 수 없습니다.</small>
+    </legend>
+
+    <div class="formsec__body">
+
+      <div class="field">
+        <label for="patient_name">이름</label>
+        <input type="text"
+          id="patient_name"
+          value="<%= patient.patient_name %>"
+          disabled>
+      </div>
+
+      <div class="field">
+        <label for="username">아이디</label>
+        <input type="text"
+          id="username"
+          value="<%= patient.username %>"
+          disabled>
+      </div>
+
+    </div>
+  </fieldset>
+
+  <fieldset class="formsec">
+    <legend class="formsec__head">
+      <span class="formsec__no">02</span>
+      <b>연락처·주소</b>
+      <small>변경할 정보를 입력해 주세요.</small>
+    </legend>
+
+    <div class="formsec__body">
+
+      <div class="field">
+        <label for="phone">
+          전화번호 <span class="req">*</span>
+        </label>
+        <input type="tel"
+          id="phone"
+          name="phone"
+          maxlength="20"
+          pattern="[0-9-]{9,20}"
+          placeholder="010-1234-5678"
+          value="<%= patient.phone %>"
+          required>
+      </div>
+
+      <div class="field">
+        <label for="zip_code">
+          우편번호 <span class="req">*</span>
+        </label>
+        <input type="text"
+          id="zip_code"
+          name="zip_code"
+          inputmode="numeric"
+          maxlength="5"
+          pattern="[0-9]{5}"
+          placeholder="숫자 5자리"
+          value="<%= patient.zip_code %>"
+          required>
+      </div>
+
+      <div class="field field--full">
+        <label for="address1">
+          기본주소 <span class="req">*</span>
+        </label>
+        <input type="text"
+          id="address1"
+          name="address1"
+          maxlength="255"
+          value="<%= patient.address1 %>"
+          required>
+      </div>
+
+      <div class="field">
+        <label for="address2">상세주소</label>
+        <input type="text"
+          id="address2"
+          name="address2"
+          maxlength="255"
+          value="<%= patient.address2 || '' %>">
+      </div>
+
+      <div class="field">
+        <label for="address3">참고항목</label>
+        <input type="text"
+          id="address3"
+          name="address3"
+          maxlength="255"
+          placeholder="예: (성북동, 한성아파트)"
+          value="<%= patient.address3 || '' %>">
+      </div>
+
+    </div>
+  </fieldset>
+
+  <div class="form__actions">
+    <a class="btn btn--secondary" href="/">취소</a>
+
+    <a class="btn btn--secondary"
+       href="/auth/change-password">
+      비밀번호 변경
+    </a>
+
+    <button type="submit" class="btn btn--primary">
+      정보 수정
+    </button>
+  </div>
+
+</form>
+
+<%- include('../layout/footer') %>
