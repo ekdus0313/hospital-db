@@ -1,0 +1,48 @@
+<%- include('../layout/header', { title: '진료 일정', subtitle: '휴진 처리하면 그 일정의 예약이 모두 취소됩니다. 접수된 환자가 있는 일정은 휴진할 수 없습니다.' }) %>
+
+  <% if (rows.length === 0) { %>
+    <p>오늘 이후 진료 일정이 없습니다.</p>
+  <% } else { %>
+    <table>
+      <thead>
+        <tr>
+          <th>일정번호</th>
+          <th>진료일자</th>
+          <th>시간</th>
+          <th>진료과</th>
+          <th>담당의사</th>
+          <th>정원</th>
+          <th>예약</th>
+          <th>접수</th>
+          <th>운영</th>
+          <th>처리</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% rows.forEach(function (r) { %>
+          <tr class="<%= r.operation_status === '휴진' ? 'row-muted' : '' %>">
+            <td><%= r.schedule_no %></td>
+            <td><%= r.schedule_date %></td>
+            <td><%= r.start_time %>~<%= r.end_time %></td>
+            <td><%= r.dept_name %></td>
+            <td><%= r.employee_name %></td>
+            <td><%= r.capacity %></td>
+            <td><%= r.reserved_count %></td>
+            <td><%= r.received_count %></td>
+            <td><%= r.operation_status %></td>
+            <td>
+              <% if (r.operation_status === '정상' && r.received_count == 0) { %>
+                <form class="inline-form" method="post" action="/reservation/schedules/<%= r.schedule_no %>/close"
+                      onsubmit="return confirm('휴진 처리하면 예약 <%= r.reserved_count %>건이 모두 취소됩니다. 진행할까요?')">
+                  <button type="submit" class="btn btn--secondary btn--sm">휴진</button>
+                </form>
+              <% } else { %>
+                -
+              <% } %>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+<%- include('../layout/footer') %>

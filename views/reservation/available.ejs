@@ -1,7 +1,5 @@
 <%- include('../layout/header', { title: '예약 가능 시간 조회' }) %>
 
-  <h1>예약 가능 시간 조회</h1>
-
   <!-- 칸을 고를 때마다 폼을 보내서, 다음 칸의 목록을 서버에서 채워 온다 -->
   <form method="get" action="/reservation/available">
     <label>진료과
@@ -47,9 +45,15 @@
   <% } else if (rows.length === 0) { %>
     <p>이 날짜에는 예약 가능한 시간이 없습니다.</p>
   <% } else { %>
+    <!-- 시간을 하나 고르고 [예약하기] — 정원·중복 검사는 서버에서 저장 직전에 한다 -->
+    <form method="post" action="/reservation/create">
+    <input type="hidden" name="dept"   value="<%= selected.dept %>">
+    <input type="hidden" name="doctor" value="<%= selected.doctor %>">
+    <input type="hidden" name="date"   value="<%= selected.date %>">
     <table>
       <thead>
         <tr>
+          <th>선택</th>
           <th>일정번호</th>
           <th>시작시간</th>
           <th>종료시간</th>
@@ -61,6 +65,7 @@
       <tbody>
         <% rows.forEach(function (r) { %>
           <tr>
+            <td><input type="radio" name="schedule_no" value="<%= r.schedule_no %>" required></td>
             <td><%= r.schedule_no %></td>
             <td><%= r.start_time %></td>
             <td><%= r.end_time %></td>
@@ -71,5 +76,19 @@
         <% }) %>
       </tbody>
     </table>
+
+    <% if (user.role === '원무') { %>
+      <label>환자
+        <select name="patient_no" required>
+          <option value="">-- 선택 --</option>
+          <% patients.forEach(function (p) { %>
+            <option value="<%= p.patient_no %>"><%= p.patient_name %> (<%= p.birth_date %>, <%= p.patient_no %>)</option>
+          <% }) %>
+        </select>
+      </label>
+    <% } %>
+
+    <button type="submit" class="btn btn--primary">예약하기</button>
+    </form>
   <% } %>
 <%- include('../layout/footer') %>
