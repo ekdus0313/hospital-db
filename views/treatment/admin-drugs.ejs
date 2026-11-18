@@ -1,0 +1,76 @@
+<%- include('../layout/header', { title: '약품 관리',
+      subtitle: '단가를 바꿔도 지난 처방 금액은 바뀌지 않습니다. 약품은 지우지 않고 중단합니다.' }) %>
+
+<form class="form" method="post" action="/treatment/admin/drugs">
+  <fieldset class="formsec">
+    <legend class="formsec__head"><b>약품 등록</b>
+      <small>등록하면 바로 「사용」 상태가 됩니다.</small></legend>
+    <div class="formsec__body">
+      <label class="field"><span>약품코드 <span class="req">*</span></span>
+        <input name="drug_code" maxlength="20" placeholder="DR0021" required></label>
+      <label class="field"><span>약품명 <span class="req">*</span></span>
+        <input name="drug_name" maxlength="50" placeholder="타이레놀정 500mg" required></label>
+      <label class="field"><span>성분 <span class="req">*</span></span>
+        <input name="ingredient" maxlength="50" placeholder="아세트아미노펜" required></label>
+      <label class="field"><span>제형 <span class="req">*</span></span>
+        <select name="drug_form" required>
+          <option value="">고르세요</option>
+          <% forms.forEach(function (f) { %>
+            <option><%= f %></option>
+          <% }) %>
+        </select></label>
+      <label class="field"><span>단가(원) <span class="req">*</span></span>
+        <input name="unit_price" type="number" min="0" step="1"
+               placeholder="180" required></label>
+    </div>
+  </fieldset>
+  <div class="form__actions">
+    <button type="submit" class="btn btn--primary">등록</button></div>
+</form>
+
+<% if (rows.length === 0) { %>
+  <p class="empty">등록된 약품이 없습니다.</p>
+<% } else { %>
+  <table>
+    <thead>
+      <tr>
+        <th>약품코드</th><th>약품명</th><th>성분</th><th>제형</th>
+        <th>단가</th><th>처방 건수</th><th>상태</th><th>처리</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% rows.forEach(function (d) { %>
+        <tr class="<%= d.use_status === '미사용' ? 'row-muted' : '' %>">
+          <td class="code"><%= d.drug_code %></td>
+          <td><%= d.drug_name %></td>
+          <td><%= d.ingredient %></td>
+          <td><%= d.drug_form %></td>
+          <td>
+            <form class="inline-form" method="post"
+                  action="/treatment/admin/drugs/<%= d.drug_code %>/edit">
+              <input name="unit_price" type="number" min="0"
+                     value="<%= d.unit_price %>" style="width:80px" required>
+              <button type="submit" class="btn btn--sm">저장</button>
+            </form>
+          </td>
+          <td class="tnum"><%= d.used_count %></td>
+          <td>
+            <span class="tag <%= d.use_status === '사용' ? 'tag--ok' : 'tag--neutral' %>">
+              <%= d.use_status %></span>
+          </td>
+          <td>
+            <% if (d.use_status === '사용') { %>
+              <form class="inline-form" method="post"
+                    action="/treatment/admin/drugs/<%= d.drug_code %>/stop"
+                    onsubmit="return confirm('중단할까요? 지난 처방은 그대로 남습니다.')">
+                <button type="submit" class="btn btn--secondary btn--sm">중단</button>
+              </form>
+            <% } else { %>–<% } %>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+<% } %>
+
+<%- include('../layout/footer') %>

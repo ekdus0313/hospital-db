@@ -1,0 +1,73 @@
+<%- include('../layout/header', { title: '검사항목 관리',
+      subtitle: '검사비를 바꿔도 지난 검사 금액은 바뀌지 않습니다. 검사항목은 지우지 않고 중단합니다.' }) %>
+
+<form class="form" method="post" action="/treatment/admin/test-items">
+  <fieldset class="formsec">
+    <legend class="formsec__head"><b>검사항목 등록</b>
+      <small>등록하면 바로 「사용」 상태가 됩니다.</small></legend>
+    <div class="formsec__body">
+      <label class="field"><span>검사코드 <span class="req">*</span></span>
+        <input name="test_code" maxlength="20" placeholder="T1310" required></label>
+      <label class="field"><span>검사명 <span class="req">*</span></span>
+        <input name="test_name" maxlength="50" placeholder="공복혈당" required></label>
+      <label class="field"><span>분류 <span class="req">*</span></span>
+        <select name="test_category" required>
+          <option value="">고르세요</option>
+          <% cats.forEach(function (c) { %>
+            <option><%= c %></option>
+          <% }) %>
+        </select></label>
+      <label class="field"><span>검사비(원) <span class="req">*</span></span>
+        <input name="test_price" type="number" min="0" step="1"
+               placeholder="2200" required></label>
+    </div>
+  </fieldset>
+  <div class="form__actions">
+    <button type="submit" class="btn btn--primary">등록</button></div>
+</form>
+
+<% if (rows.length === 0) { %>
+  <p class="empty">등록된 검사항목이 없습니다.</p>
+<% } else { %>
+  <table>
+    <thead>
+      <tr>
+        <th>검사코드</th><th>검사명</th><th>분류</th>
+        <th>검사비</th><th>검사 건수</th><th>상태</th><th>처리</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% rows.forEach(function (t) { %>
+        <tr class="<%= t.use_status === '미사용' ? 'row-muted' : '' %>">
+          <td class="code"><%= t.test_code %></td>
+          <td><%= t.test_name %></td>
+          <td><%= t.test_category %></td>
+          <td>
+            <form class="inline-form" method="post"
+                  action="/treatment/admin/test-items/<%= t.test_code %>/edit">
+              <input name="test_price" type="number" min="0"
+                     value="<%= t.test_price %>" style="width:90px" required>
+              <button type="submit" class="btn btn--sm">저장</button>
+            </form>
+          </td>
+          <td class="tnum"><%= t.used_count %></td>
+          <td>
+            <span class="tag <%= t.use_status === '사용' ? 'tag--ok' : 'tag--neutral' %>">
+              <%= t.use_status %></span>
+          </td>
+          <td>
+            <% if (t.use_status === '사용') { %>
+              <form class="inline-form" method="post"
+                    action="/treatment/admin/test-items/<%= t.test_code %>/stop"
+                    onsubmit="return confirm('중단할까요? 지난 검사는 그대로 남습니다.')">
+                <button type="submit" class="btn btn--secondary btn--sm">중단</button>
+              </form>
+            <% } else { %>–<% } %>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+<% } %>
+
+<%- include('../layout/footer') %>

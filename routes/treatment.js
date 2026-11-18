@@ -611,5 +611,137 @@ router.post('/test/result', requireRole('검사실'), async (req, res) => {
   }
 });
 
+// ══════════ 관리자: 약품 관리 (10주차) ══════════
+const DRUG_BACK  = '/treatment/admin/drugs';
+const DRUG_FORMS = ['정제', '캡슐제', '시럽제', '주사제', '연고제', '산제'];
+
+// ① 목록 + 등록 폼
+router.get('/admin/drugs', requireRole('관리자'), async (req, res) => {
+  const [rows] = await db.query(`
+    SELECT d.*,
+           (SELECT COUNT(*) FROM prescription p
+             WHERE p.drug_code = d.drug_code) AS used_count
+    FROM   drug d
+    ORDER BY d.use_status, d.drug_code`);
+  res.render('treatment/admin-drugs', { rows, forms: DRUG_FORMS });
+});
+
+// ② 등록 — use_status 는 화면에서 받지 않고 '사용' 으로 고정한다
+router.post('/admin/drugs', requireRole('관리자'), async (req, res) => {
+  const { drug_code, drug_name, ingredient, drug_form } = req.body;
+  const unitPrice = Number(req.body.unit_price);
+
+  if (!drug_code || !drug_name || !ingredient || !drug_form)
+    return flashTo(req, res, 'danger', '빈 칸이 있습니다.', DRUG_BACK);
+  if (!DRUG_FORMS.includes(drug_form))
+    return flashTo(req, res, 'danger', '제형이 올바르지 않습니다.', DRUG_BACK);
+  if (!Number.isInteger(unitPrice) || unitPrice < 0)
+    return flashTo(req, res, 'danger', '단가는 0 이상의 정수여야 합니다.', DRUG_BACK);
+
+  try {
+    await db.query(`
+      INSERT INTO drug (drug_code, drug_name, ingredient, drug_form, unit_price, use_status)
+      VALUES (?, ?, ?, ?, ?, '사용')`,
+      [drug_code.trim(), drug_name.trim(), ingredient.trim(), drug_form, unitPrice]);
+    flashTo(req, res, 'ok', `${drug_name} 을(를) 등록했습니다.`, DRUG_BACK);
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY')
+      return flashTo(req, res, 'danger', '이미 있는 약품코드입니다.', DRUG_BACK);
+    console.error('약품 등록 오류:', err);
+    flashTo(req, res, 'danger', '등록 중 문제가 생겼습니다.', DRUG_BACK);
+  }
+});
+
+// ③ 단가 수정 — 약품코드와 성분은 바꾸지 않는다.
+//    지난 처방 금액은 prescription.applied_price 에 복사돼 있어 1원도 안 바뀐다.
+router.post('/admin/drugs/:code/edit', requireRole('관리자'), async (req, res) => {
+  const unitPrice = Number(req.body.unit_price);
+  if (!Number.isInteger(unitPrice) || unitPrice < 0)
+    return flashTo(req, res, 'danger', '단가는 0 이상의 정수여야 합니다.', DRUG_BACK);
+
+  const [r] = await db.query(
+    'UPDATE drug SET unit_price = ? WHERE drug_code = ?',
+    [unitPrice, req.params.code]);
+  if (r.affectedRows === 0)                // 바뀐 줄이 0개면 없는 약품
+    return flashTo(req, res, 'danger', '없는 약품입니다.', DRUG_BACK);
+  flashTo(req, res, 'ok',
+    '단가를 바꿨습니다. 지난 처방 금액은 그대로입니다.', DRUG_BACK);
+});
+
+// ④ 중단 — 지우지 않고 use_status 만 바꾼다
+router.post('/admin/drugs/:code/stop', requireRole('관리자'), async (req, res) => {
+  const [r] = await db.query(
+    "UPDATE drug SET use_status = '미사용' WHERE drug_code = ? AND use_status = '사용'",
+    [req.params.code]);
+  if (r.affectedRows === 0)
+    return flashTo(req, res, 'danger', '이미 중단된 약품입니다.', DRUG_BACK);
+  flashTo(req, res, 'ok',
+    '중단했습니다. 의사의 처방 드롭다운에서 빠집니다.', DRUG_BACK);
+});
+
+// ══════════ 관리자: 검사항목 관리 (10주차) ══════════
+const TEST_BACK = '/treatment/admin/test-items';
+const TEST_CATS = ['혈액검사', '영상검사', '기능검사'];
+
+// ① 목록 + 등록 폼
+router.get('/admin/test-items', requireRole('관리자'), async (req, res) => {
+  const [rows] = await db.query(`
+    SELECT t.*,
+           (SELECT COUNT(*) FROM test x
+             WHERE x.test_code = t.test_code) AS used_count
+    FROM   test_item t
+    ORDER BY t.use_status, t.test_category, t.test_code`);
+  res.render('treatment/admin-test-items', { rows, cats: TEST_CATS });
+});
+
+// ② 등록
+router.post('/admin/test-items', requireRole('관리자'), async (req, res) => {
+  const { test_code, test_name, test_category } = req.body;
+  const price = Number(req.body.test_price);
+
+  if (!test_code || !test_name || !TEST_CATS.includes(test_category))
+    return flashTo(req, res, 'danger', '빈 칸이 있거나 분류가 올바르지 않습니다.', TEST_BACK);
+  if (!Number.isInteger(price) || price < 0)
+    return flashTo(req, res, 'danger', '검사비는 0 이상의 정수여야 합니다.', TEST_BACK);
+
+  try {
+    await db.query(`
+      INSERT INTO test_item (test_code, test_name, test_category, test_price, use_status)
+      VALUES (?, ?, ?, ?, '사용')`,
+      [test_code.trim(), test_name.trim(), test_category, price]);
+    flashTo(req, res, 'ok', `${test_name} 을(를) 등록했습니다.`, TEST_BACK);
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY')
+      return flashTo(req, res, 'danger', '이미 있는 검사코드입니다.', TEST_BACK);
+    console.error('검사항목 등록 오류:', err);
+    flashTo(req, res, 'danger', '등록 중 문제가 생겼습니다.', TEST_BACK);
+  }
+});
+
+// ③ 검사비 수정 — 지난 검사 금액은 test.applied_price 에 남아 그대로다
+router.post('/admin/test-items/:code/edit', requireRole('관리자'), async (req, res) => {
+  const price = Number(req.body.test_price);
+  if (!Number.isInteger(price) || price < 0)
+    return flashTo(req, res, 'danger', '검사비는 0 이상의 정수여야 합니다.', TEST_BACK);
+
+  const [r] = await db.query(
+    'UPDATE test_item SET test_price = ? WHERE test_code = ?',
+    [price, req.params.code]);
+  if (r.affectedRows === 0)
+    return flashTo(req, res, 'danger', '없는 검사항목입니다.', TEST_BACK);
+  flashTo(req, res, 'ok',
+    '검사비를 바꿨습니다. 지난 검사 금액은 그대로입니다.', TEST_BACK);
+});
+
+// ④ 중단 — 의사의 검사 지시 드롭다운에서 빠진다
+router.post('/admin/test-items/:code/stop', requireRole('관리자'), async (req, res) => {
+  const [r] = await db.query(
+    "UPDATE test_item SET use_status = '미사용' WHERE test_code = ? AND use_status = '사용'",
+    [req.params.code]);
+  if (r.affectedRows === 0)
+    return flashTo(req, res, 'danger', '이미 중단된 검사항목입니다.', TEST_BACK);
+  flashTo(req, res, 'ok',
+    '중단했습니다. 의사의 검사 지시 목록에서 빠집니다.', TEST_BACK);
+});
 
 module.exports = router;
