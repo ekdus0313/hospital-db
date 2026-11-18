@@ -59,6 +59,7 @@ app.use('/reservation', require('./routes/reservation'));
 app.use('/treatment',   require('./routes/treatment'));
 app.use('/admission',   require('./routes/admission'));
 app.use('/patient',     require('./routes/patient'));   // 환자 화면 (조원5)
+app.use('/stats',       require('./routes/stats'));     // 관리자 통계 (조원5·10주차)
 
 // 메인 화면 — 로그인 전에는 소개, 로그인 후에는 역할별 바로가기 (조원5)
 app.get('/', async (req, res) => {
