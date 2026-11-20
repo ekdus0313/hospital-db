@@ -7,8 +7,10 @@
 //   POST /reservation/create              예약하기        (8·9주차)
 //   POST /reservation/:no/cancel          예약 취소        (8·9주차)
 //   POST /reservation/:no/reception       접수 + 대기번호  (8·9주차)
-//   GET  /reservation/schedules           진료 일정 목록 (원무)
+//   GET  /reservation/schedules           진료 일정 목록 (원무·관리자)
 //   POST /reservation/schedules/:no/close 휴진 처리 + 그 일정 예약 일괄 취소 (R-0031)
+//   POST /reservation/schedules           진료 일정 등록 (관리자, 10주차)
+//   POST /reservation/schedules/:no/edit  정원 수정 (관리자, 10주차)
 //
 // 저장은 세 가지 모두 "검사 → 저장" 을 한 트랜잭션 안에서 한다.
 // 검사와 저장 사이에 다른 사람이 끼어들지 못하게 FOR UPDATE 로 줄을 잠근다.
@@ -397,7 +399,8 @@ router.post('/:no/reception', requireRole('원무'), async (req, res) => {
 
 
 // ⑥ 진료 일정 목록 — 오늘 이후 일정과 살아 있는 예약 수, [휴진] 버튼
-router.get('/schedules', requireRole('원무'), async (req, res) => {
+//    관리자에게는 등록 폼과 정원 수정 칸이 같이 나온다.
+router.get('/schedules', requireRole('원무', '관리자'), async (req, res) => {
   const [rows] = await db.query(`
     SELECT ms.schedule_no,
            DATE_FORMAT(ms.schedule_date, '%Y-%m-%d') AS schedule_date,
@@ -419,7 +422,19 @@ router.get('/schedules', requireRole('원무'), async (req, res) => {
     ORDER BY  ms.schedule_date, ms.start_time, e.employee_name
   `);
 
-  res.render('reservation/schedules', { rows });
+  // 등록 폼의 의사 목록 — 재직 중인 의사만
+  let doctors = [];
+  if (req.session.user.role === '관리자') {
+    [doctors] = await db.query(`
+      SELECT e.employee_no, e.employee_name, d.dept_name
+      FROM   employee   e
+      JOIN   department d ON d.dept_code = e.dept_code
+      WHERE  e.job_type = '의사' AND e.emp_status = '재직'
+      ORDER BY d.dept_name, e.employee_name
+    `);
+  }
+
+  res.render('reservation/schedules', { rows, doctors });
 });
 
 
@@ -429,7 +444,7 @@ router.get('/schedules', requireRole('원무'), async (req, res) => {
 //    "휴진인데 예약은 살아 있는" 상태가 남기 때문이다.
 //    일정 줄을 FOR UPDATE 로 잠가, 휴진 처리 중에 새 예약·접수가 끼어들지 못하게 한다.
 //    (예약하기·접수도 같은 일정 줄을 잠그므로 차례로 처리된다)
-router.post('/schedules/:no/close', requireRole('원무'), async (req, res) => {
+router.post('/schedules/:no/close', requireRole('원무', '관리자'), async (req, res) => {
   const no = req.params.no;
   try {
     const canceled = await inTransaction(async (conn) => {
@@ -475,6 +490,127 @@ router.post('/schedules/:no/close', requireRole('원무'), async (req, res) => {
       text = '휴진 처리 중 문제가 생겼습니다. 잠시 후 다시 시도해 주세요.';
     }
     return flashRedirect(req, res, 'danger', text, '/reservation/schedules');
+  }
+});
+
+
+const SCHEDULE_BACK = '/reservation/schedules';
+
+// ⑧ 진료 일정 등록 (관리자) — 운영상태는 화면에서 받지 않고 '정상' 으로 고정한다
+//    일정번호는 기존 번호(1021, 2001 …) 중 가장 큰 수 + 1.
+//    두 관리자가 동시에 등록해 번호가 겹치면 PK 오류가 나고, 한 번 더 시도한다.
+router.post('/schedules', requireRole('관리자'), async (req, res) => {
+  const { employee_no, schedule_date, start_time, end_time } = req.body;
+  const capacity = Number(req.body.capacity);
+  const fail = msg => flashRedirect(req, res, 'danger', msg, SCHEDULE_BACK);
+
+  if (!employee_no || !schedule_date || !start_time || !end_time || !req.body.capacity)
+    return fail('빈 칸이 있습니다.');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(schedule_date) || !/^\d{2}:\d{2}(:\d{2})?$/.test(start_time) || !/^\d{2}:\d{2}(:\d{2})?$/.test(end_time))
+    return fail('날짜·시각 형식이 올바르지 않습니다.');
+  if (end_time <= start_time)
+    return fail('종료시각은 시작시각보다 늦어야 합니다.');
+  if (!Number.isInteger(capacity) || capacity < 1)
+    return fail('정원은 1 이상의 정수여야 합니다.');
+
+  const createOnce = async (conn) => {
+    // 재직 중인 의사인지
+    const [[doc]] = await conn.query(`
+      SELECT employee_name FROM employee
+      WHERE  employee_no = ? AND job_type = '의사' AND emp_status = '재직'
+    `, [employee_no]);
+    if (!doc) throw new RuleError('재직 중인 의사를 선택해 주세요.');
+
+    // 오늘 이전 날짜는 안 된다
+    const [[{ past }]] = await conn.query('SELECT ? < CURDATE() AS past', [schedule_date]);
+    if (past) throw new RuleError('지난 날짜에는 일정을 만들 수 없습니다.');
+
+    // 같은 의사·같은 날에 시간이 겹치는 일정이 있는지
+    // (UNIQUE 는 시작시각이 같을 때만 막으므로, 09:00~12:00 과 10:00~13:00 같은 겹침은 여기서 막는다)
+    const [overlap] = await conn.query(`
+      SELECT schedule_no FROM medical_schedule
+      WHERE  employee_no = ? AND schedule_date = ?
+        AND  start_time < ? AND end_time > ?
+    `, [employee_no, schedule_date, end_time, start_time]);
+    if (overlap.length) throw new RuleError(`같은 시간대에 이미 일정(${overlap[0].schedule_no})이 있습니다.`);
+
+    const [[{ next_no }]] = await conn.query(
+      'SELECT COALESCE(MAX(CAST(schedule_no AS UNSIGNED)), 1000) + 1 AS next_no FROM medical_schedule');
+
+    await conn.query(`
+      INSERT INTO medical_schedule (schedule_no, schedule_date, start_time, end_time,
+                                    capacity, operation_status, employee_no)
+      VALUES (?, ?, ?, ?, ?, '정상', ?)
+    `, [String(next_no), schedule_date, start_time, end_time, capacity, employee_no]);
+
+    return { no: next_no, name: doc.employee_name };
+  };
+
+  const createWithRetry = async (tries = 3) => {
+    try {
+      return await inTransaction(createOnce);
+    } catch (err) {
+      const pkClash = err.code === 'ER_DUP_ENTRY' && /PRIMARY/.test(err.message);
+      if (pkClash && tries > 1) return createWithRetry(tries - 1);
+      throw err;
+    }
+  };
+
+  try {
+    const made = await createWithRetry();
+    return flashRedirect(req, res, 'ok',
+      `${made.name} ${schedule_date} ${start_time}~${end_time} 일정(${made.no})을 등록했습니다.`, SCHEDULE_BACK);
+  } catch (err) {
+    if (err instanceof RuleError) return fail(err.message);
+    if (err.code === 'ER_DUP_ENTRY') return fail('같은 의사·날짜·시작시각의 일정이 이미 있습니다.');
+    if (err.code === 'ER_CHECK_CONSTRAINT_VIOLATED') return fail('종료시각·정원을 다시 확인해 주세요.');
+    console.error('진료 일정 등록 오류:', err);
+    return fail('등록 중 문제가 생겼습니다. 잠시 후 다시 시도해 주세요.');
+  }
+});
+
+
+// ⑨ 정원 수정 (관리자)
+//    이미 예약된 수보다 작게 줄이면 정원을 넘는 예약이 생긴다 → 막는다.
+//    예약 수를 센 뒤 UPDATE 하기 전에 새 예약이 끼어들 수 있으므로
+//    예약하기와 같은 방식으로 일정 줄을 FOR UPDATE 로 잠근다.
+//    날짜·시각은 바꾸지 않는다 — 이미 예약한 환자의 예약일시가 어긋나기 때문이다.
+//    (진료를 못 하게 되면 휴진 처리 후 새 일정을 등록한다)
+router.post('/schedules/:no/edit', requireRole('관리자'), async (req, res) => {
+  const no = req.params.no;
+  const capacity = Number(req.body.capacity);
+  if (!Number.isInteger(capacity) || capacity < 1)
+    return flashRedirect(req, res, 'danger', '정원은 1 이상의 정수여야 합니다.', SCHEDULE_BACK);
+
+  try {
+    await inTransaction(async (conn) => {
+      const [[ms]] = await conn.query(`
+        SELECT operation_status, schedule_date >= CURDATE() AS not_past
+        FROM   medical_schedule
+        WHERE  schedule_no = ?
+        FOR UPDATE
+      `, [no]);
+      if (!ms)                            throw new RuleError('없는 진료 일정입니다.');
+      if (ms.operation_status === '휴진')  throw new RuleError('휴진된 일정은 수정할 수 없습니다.');
+      if (!ms.not_past)                   throw new RuleError('지난 일정은 수정할 수 없습니다.');
+
+      const [[{ cnt }]] = await conn.query(`
+        SELECT COUNT(*) AS cnt FROM reservation
+        WHERE  schedule_no = ? AND reservation_status <> '취소'
+      `, [no]);
+      if (capacity < cnt)
+        throw new RuleError(`이미 예약된 인원(${cnt}명)보다 작게 줄일 수 없습니다.`);
+
+      await conn.query('UPDATE medical_schedule SET capacity = ? WHERE schedule_no = ?', [capacity, no]);
+    });
+    return flashRedirect(req, res, 'ok', `일정 ${no} 의 정원을 ${capacity}명으로 바꿨습니다.`, SCHEDULE_BACK);
+  } catch (err) {
+    let text = err.message;
+    if (!(err instanceof RuleError)) {
+      console.error('정원 수정 오류:', err);
+      text = '수정 중 문제가 생겼습니다. 잠시 후 다시 시도해 주세요.';
+    }
+    return flashRedirect(req, res, 'danger', text, SCHEDULE_BACK);
   }
 });
 
