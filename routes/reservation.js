@@ -7,8 +7,10 @@
 //   POST /reservation/create              예약하기        (8·9주차)
 //   POST /reservation/:no/cancel          예약 취소        (8·9주차)
 //   POST /reservation/:no/reception       접수 + 대기번호  (8·9주차)
-//   GET  /reservation/schedules           진료 일정 목록 (원무)
-//   POST /reservation/schedules/:no/close 휴진 처리 + 그 일정 예약 일괄 취소 (R-0031)
+//   GET  /reservation/schedules           진료 일정 목록 (원무·관리자)
+//   POST /reservation/schedules/:no/close 휴진 처리 + 그 일정 예약 일괄 취소 (R-0031, 원무)
+//   POST /reservation/schedules           진료 일정 등록 (관리자·원무, 10주차)
+//   POST /reservation/schedules/:no/edit  시각·정원 수정 (관리자·원무, 10주차)
 //
 // 저장은 세 가지 모두 "검사 → 저장" 을 한 트랜잭션 안에서 한다.
 // 검사와 저장 사이에 다른 사람이 끼어들지 못하게 FOR UPDATE 로 줄을 잠근다.
@@ -397,7 +399,8 @@ router.post('/:no/reception', requireRole('원무'), async (req, res) => {
 
 
 // ⑥ 진료 일정 목록 — 오늘 이후 일정과 살아 있는 예약 수, [휴진] 버튼
-router.get('/schedules', requireRole('원무'), async (req, res) => {
+//    위에 등록 폼, 「처리」 칸에 수정 폼이 같이 나온다.
+router.get('/schedules', requireRole('원무', '관리자'), async (req, res) => {
   const [rows] = await db.query(`
     SELECT ms.schedule_no,
            DATE_FORMAT(ms.schedule_date, '%Y-%m-%d') AS schedule_date,
@@ -419,7 +422,15 @@ router.get('/schedules', requireRole('원무'), async (req, res) => {
     ORDER BY  ms.schedule_date, ms.start_time, e.employee_name
   `);
 
-  res.render('reservation/schedules', { rows });
+  // 등록 폼의 의사 목록 — 재직 중인 의사만
+  const [doctors] = await db.query(`
+    SELECT e.employee_no, e.employee_name, d.dept_name
+    FROM   employee   e
+    JOIN   department d ON d.dept_code = e.dept_code
+    WHERE  e.job_type = '의사' AND e.emp_status = '재직'
+    ORDER BY d.dept_name, e.employee_name`);
+
+  res.render('reservation/schedules', { rows, doctors });
 });
 
 
@@ -478,5 +489,91 @@ router.post('/schedules/:no/close', requireRole('원무'), async (req, res) => {
   }
 });
 
+
+// ══════════ 관리자 : 진료일정 등록 · 수정 (10주차) ══════════
+const SCH_BACK = '/reservation/schedules';
+
+// ⑧ 등록 — 운영상태는 화면에서 받지 않고 '정상' 으로 고정한다
+router.post('/schedules', requireRole('관리자', '원무'), async (req, res) => {
+  const { schedule_no, employee_no, schedule_date, start_time, end_time } = req.body;
+  const capacity = Number(req.body.capacity);
+  if (!schedule_no || !employee_no || !schedule_date || !start_time || !end_time)
+    return flashRedirect(req, res, 'danger', '빈 칸이 있습니다.', SCH_BACK);
+  if (!Number.isInteger(capacity) || capacity < 1)
+    return flashRedirect(req, res, 'danger', '정원은 1명 이상이어야 합니다.', SCH_BACK);
+  if (end_time <= start_time)
+    return flashRedirect(req, res, 'danger', '종료시각이 시작시각보다 빠릅니다.', SCH_BACK);
+
+  try {
+    await db.query(`
+      INSERT INTO medical_schedule
+        (schedule_no, schedule_date, start_time, end_time,
+         capacity, operation_status, employee_no)
+      VALUES (?, ?, ?, ?, ?, '정상', ?)`,
+      [schedule_no.trim(), schedule_date, start_time, end_time, capacity, employee_no]);
+    flashRedirect(req, res, 'ok', '진료일정을 등록했습니다.', SCH_BACK);
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY')
+      return flashRedirect(req, res, 'danger',
+        '일정번호가 겹치거나, 그 의사의 같은 날 같은 시각 일정이 이미 있습니다.', SCH_BACK);
+    if (err.code === 'ER_NO_REFERENCED_ROW_2')
+      return flashRedirect(req, res, 'danger', '없는 의사입니다.', SCH_BACK);
+    if (err.code === 'ER_CHECK_CONSTRAINT_VIOLATED')
+      return flashRedirect(req, res, 'danger', '시각이나 정원이 올바르지 않습니다.', SCH_BACK);
+    console.error('진료일정 등록 오류:', err);
+    flashRedirect(req, res, 'danger', '등록 중 문제가 생겼습니다.', SCH_BACK);
+  }
+});
+
+// ⑨ 수정 — 일정번호와 의사는 바꾸지 않는다.
+//    이미 들어온 예약 건수보다 작은 정원으로는 줄일 수 없다.
+//    예약이 있는 일정은 시각을 바꿀 수 없다 — 예약한 환자의 예약일시(reserved_at)가
+//    일정 시간 밖으로 벗어나기 때문이다. (정원은 바꿀 수 있다)
+router.post('/schedules/:no/edit', requireRole('관리자', '원무'), async (req, res) => {
+  const { start_time, end_time } = req.body;
+  const capacity = Number(req.body.capacity);
+  if (!start_time || !end_time)
+    return flashRedirect(req, res, 'danger', '시각을 입력해 주세요.', SCH_BACK);
+  if (!Number.isInteger(capacity) || capacity < 1)
+    return flashRedirect(req, res, 'danger', '정원은 1명 이상이어야 합니다.', SCH_BACK);
+  if (end_time <= start_time)
+    return flashRedirect(req, res, 'danger', '종료시각이 시작시각보다 빠릅니다.', SCH_BACK);
+
+  try {
+    await inTransaction(async (conn) => {
+      // 세는 것과 바꾸는 것 사이에 예약이 끼어들지 못하게 잠근다
+      const [[ms]] = await conn.query(`
+        SELECT schedule_no,
+               start_time = ? AND end_time = ? AS same_time
+        FROM   medical_schedule
+        WHERE  schedule_no = ?
+        FOR UPDATE`,
+        [start_time, end_time, req.params.no]);
+      if (!ms) throw new RuleError('없는 일정입니다.');
+
+      const [[{ cnt }]] = await conn.query(`
+        SELECT COUNT(*) AS cnt FROM reservation
+         WHERE schedule_no = ? AND reservation_status <> '취소'`, [req.params.no]);
+      if (capacity < cnt)
+        throw new RuleError(`이미 ${cnt}건 예약돼 있어 정원을 그보다 줄일 수 없습니다.`);
+      if (cnt > 0 && !ms.same_time)
+        throw new RuleError(`이미 ${cnt}건 예약돼 있어 시각은 바꿀 수 없습니다. 정원만 바꿀 수 있습니다.`);
+
+      await conn.query(`
+        UPDATE medical_schedule
+           SET start_time = ?, end_time = ?, capacity = ?
+         WHERE schedule_no = ?`,
+        [start_time, end_time, capacity, req.params.no]);
+    });
+    flashRedirect(req, res, 'ok', '일정을 수정했습니다.', SCH_BACK);
+  } catch (err) {
+    if (err instanceof RuleError)
+      return flashRedirect(req, res, 'danger', err.message, SCH_BACK);
+    if (err.code === 'ER_DUP_ENTRY')
+      return flashRedirect(req, res, 'danger', '그 의사의 같은 날 같은 시각 일정이 이미 있습니다.', SCH_BACK);
+    console.error('일정 수정 오류:', err);
+    flashRedirect(req, res, 'danger', '수정 중 문제가 생겼습니다.', SCH_BACK);
+  }
+});
 
 module.exports = router;
