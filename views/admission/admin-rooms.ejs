@@ -1,0 +1,112 @@
+<%# views/admission/admin-rooms.ejs — 병실·병상 관리 (조원4, 관리자) %>
+<%- include('../layout/header', { title: '병실 · 병상 관리',
+        subtitle: '병상 상태는 입원·퇴원이 바꿉니다. 여기서는 병실과 병상만 늘리고 줄입니다.' }) %>
+<%
+  const won = n => Number(n || 0).toLocaleString('ko-KR');
+%>
+
+<form class="form" method="post" action="/admission/admin/rooms">
+  <fieldset class="formsec">
+    <legend class="formsec__head"><b>병실 등록</b></legend>
+    <div class="formsec__body">
+      <label class="field"><span>병실번호 <span class="req">*</span></span>
+        <input name="room_no" placeholder="5104" required></label>
+      <label class="field"><span>병동 <span class="req">*</span></span>
+        <input name="ward" placeholder="51병동" required></label>
+      <label class="field"><span>병실유형 <span class="req">*</span></span>
+        <select name="room_type" required>
+          <option value="">고르세요</option>
+          <% types.forEach(function (t) { %><option><%= t %></option><% }) %>
+        </select></label>
+      <label class="field"><span>1일 병실료 <span class="req">*</span></span>
+        <input name="daily_fee" type="number" min="0" placeholder="42000" required></label>
+    </div>
+  </fieldset>
+  <div class="form__actions">
+    <button type="submit" class="btn btn--primary">병실 등록</button></div>
+</form>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>병실</th>
+    <th>병동 · 유형 · 1일 병실료 — 고친 뒤 「저장」</th>
+    <th>병상</th><th>삭제</th></tr></thead>
+  <tbody>
+  <% rooms.forEach(function (m) { %>
+    <tr>
+      <td class="code"><%= m.room_no %></td>
+      <td>
+        <form class="inline-form" method="post"
+              action="/admission/admin/rooms/<%= m.room_no %>/edit">
+          <input name="ward" value="<%= m.ward %>" style="width:70px" required>
+          <select name="room_type">
+            <% types.forEach(function (t) { %>
+              <option <%= t === m.room_type ? 'selected' : '' %>><%= t %></option>
+            <% }) %>
+          </select>
+          <input name="daily_fee" type="number" min="0"
+                 value="<%= m.daily_fee %>" style="width:90px" required>
+          <button type="submit" class="btn btn--sm">저장</button>
+        </form>
+      </td>
+      <td><%= m.bed_count %>개 (사용중 <%= m.busy_count %>)</td>
+      <td>
+        <form class="inline-form" method="post"
+              action="/admission/admin/rooms/<%= m.room_no %>/delete"
+              onsubmit="return confirm('이 병실을 삭제할까요?')">
+          <button type="submit" class="btn btn--secondary btn--sm">삭제</button>
+        </form>
+      </td>
+    </tr>
+  <% }) %>
+  </tbody>
+</table>
+</div>
+
+<form class="form" method="post" action="/admission/admin/beds">
+  <fieldset class="formsec">
+    <legend class="formsec__head"><b>병상 등록</b>
+      <small>등록하면 바로 「사용가능」 상태가 됩니다.</small></legend>
+    <div class="formsec__body">
+      <label class="field"><span>병상번호 <span class="req">*</span></span>
+        <input name="bed_no" placeholder="5104-1" required></label>
+      <label class="field"><span>소속 병실 <span class="req">*</span></span>
+        <select name="room_no" required>
+          <option value="">고르세요</option>
+          <% rooms.forEach(function (m) { %>
+            <option value="<%= m.room_no %>">
+              <%= m.room_no %>호 (<%= m.room_type %> · 현재 <%= m.bed_count %>개)</option>
+          <% }) %>
+        </select></label>
+    </div>
+  </fieldset>
+  <div class="form__actions">
+    <button type="submit" class="btn btn--primary">병상 등록</button></div>
+</form>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>병상번호</th><th>병실</th><th>상태</th><th>삭제</th></tr></thead>
+  <tbody>
+  <% beds.forEach(function (b) { %>
+    <tr class="<%= b.bed_status === '사용중' ? 'row-muted' : '' %>">
+      <td class="code"><%= b.bed_no %></td>
+      <td><%= b.room_no %>호 (<%= b.room_type %>)</td>
+      <td><span class="tag <%= b.bed_status === '사용가능' ? 'tag--ok' : 'tag--neutral' %>">
+        <%= b.bed_status %></span></td>
+      <td>
+        <% if (b.bed_status === '사용가능') { %>
+          <form class="inline-form" method="post"
+                action="/admission/admin/beds/<%= b.bed_no %>/delete"
+                onsubmit="return confirm('이 병상을 지울까요?')">
+            <button type="submit" class="btn btn--secondary btn--sm">삭제</button>
+          </form>
+        <% } else { %>–<% } %>
+      </td>
+    </tr>
+  <% }) %>
+  </tbody>
+</table>
+</div>
+
+<%- include('../layout/footer') %>
