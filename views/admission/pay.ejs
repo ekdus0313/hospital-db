@@ -21,6 +21,7 @@
     <p><a class="btn btn--secondary" href="/admission/inpatients">입원 현황으로</a></p>
   <% } else if (bill.pay_status === '완료') { %>
     <p class="alert">이미 수납이 끝난 진료입니다.</p>
+    <p><a class="btn btn--primary" href="/admission/payments/<%= bill.medical_record_no %>/receipt">영수증 보기</a></p>
   <% } else { %>
     <form class="form" method="POST" action="/admission/payments/<%= bill.medical_record_no %>">
       <label class="field">

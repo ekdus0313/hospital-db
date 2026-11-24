@@ -410,7 +410,7 @@ router.post('/payments/:mrno', requireRole('원무'), async (req, res) => {
     }
 
     await conn.commit();
-    res.redirect('/admission/payments?msg=' + encodeURIComponent(
+        res.redirect(`/admission/payments/${encodeURIComponent(mrno)}/receipt?msg=` + encodeURIComponent(
       `${bill.patient_name} 님 ${Number(bill.patient_amount).toLocaleString()}원 수납 완료 (${pay_method}).`));
   } catch (err) {
     await conn.rollback();
@@ -422,5 +422,55 @@ router.post('/payments/:mrno', requireRole('원무'), async (req, res) => {
   }
 });
 
+// ⑨ 수납 영수증 — 저장된 payment 값만 읽는다 (calcBill 호출 금지)
+//    수납 당시 확정된 금액이 그대로 나와야 하므로 다시 계산하지 않는다.
+router.get('/payments/:mrno/receipt', requireRole('원무', '관리자', 'patient'), async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT pm.payment_no,
+             pm.consult_amount, pm.test_amount, pm.drug_amount, pm.room_amount,
+             pm.total_amount, pm.patient_amount,
+             pm.pay_method,
+             DATE_FORMAT(pm.paid_at, '%Y-%m-%d %H:%i')   AS paid_at,
+             pm.pay_status,
+             m.medical_record_no,
+             DATE_FORMAT(m.treated_at, '%Y-%m-%d %H:%i') AS treated_at,
+             p.patient_no,
+             p.patient_name,
+             i.insurance_name,
+             e.employee_name,
+             d.dept_name,
+             a.admission_no,
+             DATE_FORMAT(a.admit_at, '%Y-%m-%d')         AS admit_at,
+             DATE_FORMAT(a.discharge_at, '%Y-%m-%d')     AS discharge_at
+      FROM      payment        pm
+      JOIN      medical_record m ON m.medical_record_no = pm.medical_record_no
+      JOIN      patient        p ON p.patient_no        = m.patient_no
+      JOIN      insurance      i ON i.insurance_code    = p.insurance_code
+      JOIN      employee       e ON e.employee_no       = m.employee_no
+      JOIN      department     d ON d.dept_code         = e.dept_code
+      LEFT JOIN admission      a ON a.medical_record_no = m.medical_record_no
+      WHERE     pm.medical_record_no = ?
+    `, [req.params.mrno]);
 
+    const r = rows[0];
+    if (!r) return res.status(404).send('수납 기록이 없습니다.');
+
+    // 환자는 본인 진료의 영수증만
+    const me = req.session.user;
+    if (me.role === 'patient' && String(r.patient_no) !== String(me.patient_no)) {
+      return res.status(403).send('접근 권한이 없습니다.');
+    }
+
+    // 미수납 행의 금액은 확정값이 아니므로 영수증을 내주지 않는다
+    if (r.pay_status !== '완료') {
+      return res.status(400).send('아직 수납이 끝나지 않은 진료입니다. 수납 후 영수증을 볼 수 있습니다.');
+    }
+
+    res.render('admission/receipt', { r, msg: req.query.msg });
+  } catch (err) {
+    console.error('영수증 조회 오류:', err);
+    res.status(500).send('영수증을 불러오는 중 오류가 발생했습니다.');
+  }
+});
 module.exports = router;
