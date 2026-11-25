@@ -1,0 +1,30 @@
+<%- include('../layout/header', { title: '진료과별 환자 수',
+      subtitle: '진료기록을 의사→진료과로 이어 집계합니다. 한 환자가 여러 번 와도 환자 수는 1명입니다.' }) %>
+
+<% if (rows.length === 0) { %>
+  <p class="empty">아직 진료기록이 없습니다.</p>
+<% } else { %>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>진료과</th><th class="num">환자 수</th>
+      <th class="num">진료 건수</th><th>비교</th></tr></thead>
+    <tbody>
+    <% rows.forEach(function (r) { %>
+      <tr>
+        <td><%= r.dept_name %></td>
+        <td class="num"><b><%= r.patient_count %></b></td>
+        <td class="num"><%= r.record_count %></td>
+        <td>
+          <% const pct = Math.round(r.patient_count / maxCount * 100) %>
+          <div style="background:#E7EBF0;height:7px;border-radius:4px">
+            <div style="background:#1F5C8B;height:7px;width:<%= pct %>%"></div>
+          </div>
+        </td>
+      </tr>
+    <% }) %>
+    </tbody>
+  </table>
+  </div>
+<% } %>
+
+<%- include('../layout/footer') %>
