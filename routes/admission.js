@@ -51,6 +51,12 @@ async function nextNo(conn, table, column, prefix, digits) {
   return prefix + String(last + 1).padStart(digits, '0');
 }
 
+// 저장 결과를 한 번만 보여 주고 이동 (treatment.js 와 같은 모양)
+function flashTo(req, res, type, text, to) {
+  req.session.flash = { type, text };
+  req.session.save(() => res.redirect(to));
+}
+
 // 진료비 계산 — 5주차 member4.sql ⑤ 쿼리를 진료 1건용으로.
 // 검사와 처방을 한 번에 JOIN 하면 행이 곱해지므로 항목마다 따로 더한다.
 // 본인부담금 = 청구금액 × copay_rate / 100, 10원 미만 절사.
@@ -410,8 +416,11 @@ router.post('/payments/:mrno', requireRole('원무'), async (req, res) => {
     }
 
     await conn.commit();
-    res.redirect('/admission/payments?msg=' + encodeURIComponent(
-      `${bill.patient_name} 님 ${Number(bill.patient_amount).toLocaleString()}원 수납 완료 (${pay_method}).`));
+    const amount = Number(bill.patient_amount).toLocaleString();
+    req.session.flash = { type: 'ok',
+      text: `${bill.patient_name} 님 ${amount}원 수납 완료 (${pay_method}).` };
+    req.session.save(() =>
+      res.redirect('/admission/receipt/' + encodeURIComponent(mrno)));
   } catch (err) {
     await conn.rollback();
     if (err.code) console.error('수납 처리 오류:', err);
@@ -419,6 +428,179 @@ router.post('/payments/:mrno', requireRole('원무'), async (req, res) => {
          : err.code ? '수납 처리 중 오류가 발생했습니다.' : err.message);
   } finally {
     conn.release();
+  }
+});
+
+// ══════════ 수납 영수증 (R-0029, 10주차) ══════════
+// 저장된 payment 줄을 그대로 읽는다. 절대 calcBill 로 다시 계산하지 않는다.
+router.get('/receipt/:mrno', requireRole('원무', '관리자', 'patient'), async (req, res) => {
+  try {
+    const params = [req.params.mrno];
+
+    // 환자로 로그인했으면 "자기 것만" 조건을 한 줄 더 붙인다.
+    // 이걸 빼면 주소만 바꿔서 남의 영수증을 볼 수 있다.
+    let mine = '';
+    if (req.session.user.role === 'patient') {
+      mine = ' AND mr.patient_no = ?';
+      params.push(req.session.user.patient_no);
+    }
+
+    const [[row]] = await db.query(`
+      SELECT pm.payment_no,
+             pm.consult_amount, pm.test_amount, pm.drug_amount, pm.room_amount,
+             pm.total_amount,   pm.patient_amount,
+             pm.pay_method,
+             DATE_FORMAT(pm.paid_at, '%Y-%m-%d %H:%i')    AS paid_at,
+             mr.medical_record_no,
+             DATE_FORMAT(mr.treated_at, '%Y-%m-%d %H:%i') AS treated_at,
+             p.patient_no, p.patient_name,
+             e.employee_name,
+             d.dept_name,
+             i.insurance_name, i.copay_rate,
+             cf.fee_name
+      FROM      payment          pm
+      JOIN      medical_record   mr ON mr.medical_record_no = pm.medical_record_no
+      JOIN      patient          p  ON p.patient_no         = mr.patient_no
+      JOIN      employee         e  ON e.employee_no        = mr.employee_no
+      JOIN      department       d  ON d.dept_code          = e.dept_code
+      JOIN      insurance        i  ON i.insurance_code     = p.insurance_code
+      JOIN      consultation_fee cf ON cf.fee_code          = pm.fee_code
+      WHERE     pm.medical_record_no = ?
+        AND     pm.pay_status        = '완료'` + mine, params);
+
+    if (!row)
+      return res.status(404).send('수납이 끝난 진료가 아니거나, 볼 수 없는 영수증입니다.');
+
+    res.render('admission/receipt', { r: row });
+  } catch (err) {
+    console.error('영수증 조회 오류:', err);
+    res.status(500).send('영수증을 불러오는 중 오류가 발생했습니다.');
+  }
+});
+
+
+// ══════════ 관리자: 병실 관리 (10주차) ══════════
+const ROOM_BACK  = '/admission/admin/rooms';
+const ROOM_TYPES = ['1인실', '2인실', '4인실', '6인실'];
+
+// ① 목록 + 등록 폼 — 병실마다 병상 몇 개, 그중 몇 개가 사용중인지 같이
+router.get('/admin/rooms', requireRole('관리자'), async (req, res) => {
+  const [rooms] = await db.query(`
+    SELECT r.*,
+           COUNT(b.bed_no)                                     AS bed_count,
+           COUNT(CASE WHEN b.bed_status = '사용중' THEN 1 END) AS busy_count
+    FROM      room r
+    LEFT JOIN bed  b ON b.room_no = r.room_no
+    GROUP BY  r.room_no, r.ward, r.room_type, r.daily_fee
+    ORDER BY  r.ward, r.room_no`);
+
+  const [beds] = await db.query(`
+    SELECT b.*, r.room_type
+    FROM   bed b JOIN room r ON r.room_no = b.room_no
+    ORDER BY b.room_no, b.bed_no`);
+
+  res.render('admission/admin-rooms', { rooms, beds, types: ROOM_TYPES });
+});
+
+// ② 병실 등록
+router.post('/admin/rooms', requireRole('관리자'), async (req, res) => {
+  const { room_no, ward, room_type } = req.body;
+  const dailyFee = Number(req.body.daily_fee);
+
+  if (!room_no || !ward || !ROOM_TYPES.includes(room_type))
+    return flashTo(req, res, 'danger', '입력값을 확인해 주세요.', ROOM_BACK);
+  if (!Number.isInteger(dailyFee) || dailyFee < 0)
+    return flashTo(req, res, 'danger', '1일 병실료는 0 이상의 정수여야 합니다.', ROOM_BACK);
+
+  try {
+    await db.query(
+      'INSERT INTO room (room_no, ward, room_type, daily_fee) VALUES (?, ?, ?, ?)',
+      [room_no.trim(), ward.trim(), room_type, dailyFee]);
+    flashTo(req, res, 'ok', `${room_no}호를 등록했습니다.`, ROOM_BACK);
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY')
+      return flashTo(req, res, 'danger', '이미 있는 병실번호입니다.', ROOM_BACK);
+    console.error('병실 등록 오류:', err);
+    flashTo(req, res, 'danger', '등록 중 문제가 생겼습니다.', ROOM_BACK);
+  }
+});
+
+// ③ 병실 수정 — 병실번호는 바꾸지 않는다.
+//    병실료를 바꿔도 지난 입원 수납 금액은 payment.room_amount 에 저장돼 있어 안 바뀐다.
+router.post('/admin/rooms/:no/edit', requireRole('관리자'), async (req, res) => {
+  const { ward, room_type } = req.body;
+  const dailyFee = Number(req.body.daily_fee);
+
+  if (!ward || !ROOM_TYPES.includes(room_type))
+    return flashTo(req, res, 'danger', '입력값을 확인해 주세요.', ROOM_BACK);
+  if (!Number.isInteger(dailyFee) || dailyFee < 0)
+    return flashTo(req, res, 'danger', '1일 병실료는 0 이상의 정수여야 합니다.', ROOM_BACK);
+
+  const [r] = await db.query(
+    'UPDATE room SET ward = ?, room_type = ?, daily_fee = ? WHERE room_no = ?',
+    [ward.trim(), room_type, dailyFee, req.params.no]);
+  if (r.affectedRows === 0)
+    return flashTo(req, res, 'danger', '없는 병실입니다.', ROOM_BACK);
+
+  flashTo(req, res, 'ok', '수정했습니다. 이미 수납이 끝난 입원 금액은 그대로입니다.', ROOM_BACK);
+});
+
+// ④ 병실 삭제 — room 에는 상태 칸이 없어서 실제로 지운다.
+//    병상이 하나라도 있으면 외래키가 막는다. 그게 맞는 동작이다.
+router.post('/admin/rooms/:no/delete', requireRole('관리자'), async (req, res) => {
+  try {
+    const [r] = await db.query('DELETE FROM room WHERE room_no = ?', [req.params.no]);
+    if (r.affectedRows === 0)
+      return flashTo(req, res, 'danger', '없는 병실입니다.', ROOM_BACK);
+    flashTo(req, res, 'ok', '삭제했습니다.', ROOM_BACK);
+  } catch (err) {
+    if (err.code === 'ER_ROW_IS_REFERENCED_2')
+      return flashTo(req, res, 'danger',
+        '이 병실에 병상이 있어 지울 수 없습니다. 병상을 먼저 지워 주세요.', ROOM_BACK);
+    throw err;
+  }
+});
+
+
+// ══════════ 관리자: 병상 관리 (10주차) ══════════
+// bed_status 는 여기서 절대 건드리지 않는다. 입원·퇴원이 바꾸는 칸이다.
+
+// ⑤ 병상 등록 — 상태는 '사용가능' 고정
+router.post('/admin/beds', requireRole('관리자'), async (req, res) => {
+  const { bed_no, room_no } = req.body;
+  if (!bed_no || !room_no)
+    return flashTo(req, res, 'danger', '빈 칸이 있습니다.', ROOM_BACK);
+
+  try {
+    // 없는 병실이면 외래키가 막지만, 메시지를 위해 먼저 확인한다
+    const [[room]] = await db.query('SELECT room_no FROM room WHERE room_no = ?', [room_no]);
+    if (!room)
+      return flashTo(req, res, 'danger', '없는 병실입니다.', ROOM_BACK);
+
+    await db.query(
+      "INSERT INTO bed (bed_no, bed_status, room_no) VALUES (?, '사용가능', ?)",
+      [bed_no.trim(), room_no]);
+    flashTo(req, res, 'ok', `병상 ${bed_no} 을(를) 등록했습니다.`, ROOM_BACK);
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY')
+      return flashTo(req, res, 'danger', '이미 있는 병상번호입니다.', ROOM_BACK);
+    console.error('병상 등록 오류:', err);
+    flashTo(req, res, 'danger', '등록 중 문제가 생겼습니다.', ROOM_BACK);
+  }
+});
+
+// ⑥ 병상 삭제 — 사용중인 병상은 지울 수 없다 (두 겹으로 막는다)
+router.post('/admin/beds/:no/delete', requireRole('관리자'), async (req, res) => {
+  try {
+    const [r] = await db.query(
+      "DELETE FROM bed WHERE bed_no = ? AND bed_status = '사용가능'", [req.params.no]);
+    if (r.affectedRows === 0)                // 지워진 줄이 0개면 사용중이거나 없는 병상
+      return flashTo(req, res, 'danger', '사용중인 병상이거나 없는 병상입니다.', ROOM_BACK);
+    flashTo(req, res, 'ok', '병상을 지웠습니다.', ROOM_BACK);
+  } catch (err) {
+    if (err.code === 'ER_ROW_IS_REFERENCED_2')
+      return flashTo(req, res, 'danger', '이 병상을 쓴 입원 기록이 있어 지울 수 없습니다.', ROOM_BACK);
+    throw err;
   }
 });
 

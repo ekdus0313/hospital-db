@@ -1,0 +1,58 @@
+<%# views/admission/receipt.ejs — 수납 영수증 (조원4, R-0029). payment 저장값만 표시 %>
+<%- include('../layout/header', { title: '수납 영수증',
+        subtitle: '수납한 시점의 금액을 그대로 보여 드립니다.' }) %>
+<%
+  const won = n => Number(n || 0).toLocaleString('ko-KR');
+  // 환자는 원무 화면(/admission/payments)에 들어갈 수 없으므로 자기 수납 내역으로 돌려보낸다
+  const isPatient = typeof user !== 'undefined' && user && user.role === 'patient';
+%>
+
+<dl class="stats">
+  <div><dt>청구금액</dt><dd><%= won(r.total_amount) %><small>원</small></dd></div>
+  <div><dt>본인부담금</dt><dd><%= won(r.patient_amount) %><small>원</small></dd></div>
+  <div><dt>본인부담률</dt><dd><%= r.copay_rate %><small>%</small></dd></div>
+</dl>
+
+<div class="table-wrap">
+<table>
+  <tbody>
+    <tr><th>수납번호</th><td class="code"><%= r.payment_no %></td>
+        <th>수납일시</th><td><%= r.paid_at %></td></tr>
+    <tr><th>환자</th><td><%= r.patient_name %> (<%= r.patient_no %>)</td>
+        <th>보험유형</th><td><%= r.insurance_name %></td></tr>
+    <tr><th>진료번호</th><td class="code"><%= r.medical_record_no %></td>
+        <th>진료일시</th><td><%= r.treated_at %></td></tr>
+    <tr><th>진료과</th><td><%= r.dept_name %></td>
+        <th>담당의사</th><td><%= r.employee_name %></td></tr>
+    <tr><th>결제수단</th><td colspan="3"><%= r.pay_method %></td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>항목</th><th class="num">금액</th></tr></thead>
+  <tbody>
+    <tr><td><%= r.fee_name %></td><td class="num"><%= won(r.consult_amount) %></td></tr>
+    <tr><td>검사료</td><td class="num"><%= won(r.test_amount) %></td></tr>
+    <tr><td>약제료</td><td class="num"><%= won(r.drug_amount) %></td></tr>
+    <tr><td>병실료</td><td class="num"><%= won(r.room_amount) %></td></tr>
+    <tr><td><b>청구금액</b></td><td class="num"><b><%= won(r.total_amount) %></b></td></tr>
+    <tr><td>보험 적용 (<%= r.insurance_name %> · 본인부담 <%= r.copay_rate %>%)</td>
+        <td class="num">− <%= won(r.total_amount - r.patient_amount) %></td></tr>
+    <tr><td><b>본인부담금</b></td><td class="num"><b><%= won(r.patient_amount) %></b></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p class="muted">10원 미만은 절사합니다. 수납한 시점의 금액이며 이후 변경되지 않습니다.</p>
+
+<div class="form__actions">
+  <% if (isPatient) { %>
+    <a class="btn btn--secondary" href="/patient/payments">내 수납 내역으로</a>
+  <% } else { %>
+    <a class="btn btn--secondary" href="/admission/payments">수납 대상으로</a>
+  <% } %>
+</div>
+
+<%- include('../layout/footer') %>

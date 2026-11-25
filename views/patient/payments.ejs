@@ -29,6 +29,7 @@
           <th class="num">본인부담금</th>
           <th>결제</th>
           <th>상태</th>
+          <th>영수증</th>
         </tr>
       </thead>
       <tbody>
@@ -44,6 +45,11 @@
             <td class="num"><b><%= won(r.patient_amount) %></b></td>
             <td class="muted"><%= r.pay_method ? r.pay_method + ' · ' + r.paid_at : '–' %></td>
             <td><span class="tag tag--<%= tag(r.pay_status) %>"><%= r.pay_status %></span></td>
+            <td>
+              <% if (r.pay_status === '완료') { %>
+                <a class="btn btn--sm" href="/admission/receipt/<%= r.medical_record_no %>">영수증</a>
+              <% } else { %>–<% } %>
+            </td>
           </tr>
         <% }) %>
       </tbody>
