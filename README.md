@@ -79,11 +79,24 @@ npm install
 
 ```env
 DB_HOST=localhost
+DB_PORT=3306
 DB_USER=root
 DB_PASSWORD=본인_MySQL_비밀번호
 DB_NAME=hospital
 PORT=3000
+SESSION_SECRET=아무_긴_문자열을_넣으세요
+SSN_ENCRYPTION_KEY=여기에_아래에서_만든_64자리_값
 ```
+
+`SSN_ENCRYPTION_KEY` 는 주민번호 뒷자리를 암호화할 때 씁니다.
+**반드시 64자리 16진수**여야 하며, 아래 명령으로 만들어 그대로 붙여 넣습니다.
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+> 이 값이 없거나 64자리가 아니면 **서버는 뜨지만 회원가입에서 실패**합니다.
+> 팀원끼리 같은 값을 쓸 필요는 없습니다. 각자 만들면 됩니다.
 
 ### 3. 데이터베이스 만들기
 
