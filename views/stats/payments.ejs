@@ -1,0 +1,48 @@
+<%- include('../layout/header', { title: '기간별 수납 금액',
+      subtitle: '수납이 완료된 건만 셉니다. 미수납은 빠집니다.' }) %>
+<%
+  const won = n => Number(n || 0).toLocaleString('ko-KR');
+%>
+
+<form class="form" method="get" action="/stats/payments">
+  <fieldset class="formsec">
+    <legend class="formsec__head"><b>기간 고르기</b></legend>
+    <div class="formsec__body">
+      <label class="field"><span>시작일</span>
+        <input name="from" type="date" value="<%= from %>" required></label>
+      <label class="field"><span>종료일</span>
+        <input name="to" type="date" value="<%= to %>" required></label>
+    </div>
+  </fieldset>
+  <div class="form__actions">
+    <button type="submit" class="btn btn--primary">조회</button></div>
+</form>
+
+<dl class="stats">
+  <div><dt>수납 건수</dt><dd><%= sum.pay_count %><small>건</small></dd></div>
+  <div><dt>청구금액 합계</dt><dd><%= won(sum.total_sum) %><small>원</small></dd></div>
+  <div><dt>본인부담금 합계</dt><dd><%= won(sum.patient_sum) %><small>원</small></dd></div>
+</dl>
+
+<% if (rows.length === 0) { %>
+  <p class="empty">이 기간에 수납된 건이 없습니다.</p>
+<% } else { %>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>수납일</th><th class="num">건수</th>
+      <th class="num">청구금액</th><th class="num">본인부담금</th></tr></thead>
+    <tbody>
+    <% rows.forEach(function (r) { %>
+      <tr>
+        <td class="tnum"><%= r.paid_day %></td>
+        <td class="num"><%= r.pay_count %></td>
+        <td class="num"><%= won(r.total_sum) %></td>
+        <td class="num"><b><%= won(r.patient_sum) %></b></td>
+      </tr>
+    <% }) %>
+    </tbody>
+  </table>
+  </div>
+<% } %>
+
+<%- include('../layout/footer') %>
