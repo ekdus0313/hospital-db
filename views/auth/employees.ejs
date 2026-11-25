@@ -1,41 +1,113 @@
-<%- include('../layout/header', { title: '직원 목록 조회', subtitle: '관리자 ' + adminName + '님 · 직원 정보 관리' }) %>
-<%# 공통 디자인(public/css/style.css)에 맞춰 모양만 바꿈 — 조회 로직은 routes/auth.js 그대로 %>
+
+<%- include('../layout/header', {
+    title: '직원 목록 조회',
+    subtitle: '관리자 ' + adminName + '님 · 직원 정보 관리'
+}) %>
+
 <dl class="stats">
-  <div><dt>전체 직원</dt><dd><%= employees.length %><small>명</small></dd></div>
-  <div><dt>재직</dt><dd><%= employees.filter(e => e.emp_status === '재직').length %><small>명</small></dd></div>
+    <div>
+        <dt>전체 직원</dt>
+        <dd><%= employees.length %><small>명</small></dd>
+    </div>
+    <div>
+        <dt>재직</dt>
+        <dd>
+            <%= employees.filter(e => e.emp_status === '재직').length %>
+            <small>명</small>
+        </dd>
+    </div>
+    <div>
+        <dt>퇴직</dt>
+        <dd>
+            <%= employees.filter(e => e.emp_status === '퇴직').length %>
+            <small>명</small>
+        </dd>
+    </div>
 </dl>
 
+<div style="margin: 16px 0; text-align: right;">
+    <a href="/auth/employees/new" class="btn">
+        + 직원 등록
+    </a>
+</div>
+
 <% if (employees.length === 0) { %>
-  <p class="empty">등록된 직원이 없습니다.</p>
+
+    <p class="empty">등록된 직원이 없습니다.</p>
+
 <% } else { %>
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>사번</th>
-          <th>이름</th>
-          <th>직종</th>
-          <th>소속</th>
-          <th>면허번호</th>
-          <th>아이디</th>
-          <th>재직상태</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% employees.forEach(employee => { %>
-          <tr class="<%= employee.emp_status === '재직' ? '' : 'row-muted' %>">
-            <td class="code"><%= employee.employee_no %></td>
-            <td><%= employee.employee_name %></td>
-            <td><%= employee.job_type %></td>
-            <td><%= employee.dept_name || employee.dept_code %></td>
-            <td class="code"><%= employee.license_no || '-' %></td>
-            <td><%= employee.username %></td>
-            <td><span class="tag tag--<%= employee.emp_status === '재직' ? 'ok' : 'neutral' %>"><%= employee.emp_status %></span></td>
-          </tr>
-        <% }); %>
-      </tbody>
-    </table>
-  </div>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>사번</th>
+                    <th>이름</th>
+                    <th>직종</th>
+                    <th>소속</th>
+                    <th>면허번호</th>
+                    <th>아이디</th>
+                    <th>재직상태</th>
+                    <th>관리</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                <% employees.forEach(employee => { %>
+
+                    <tr class="<%= employee.emp_status === '재직' ? '' : 'row-muted' %>">
+
+                        <td class="code"><%= employee.employee_no %></td>
+                        <td><%= employee.employee_name %></td>
+                        <td><%= employee.job_type %></td>
+                        <td><%= employee.dept_name || employee.dept_code %></td>
+                        <td class="code"><%= employee.license_no || '-' %></td>
+                        <td><%= employee.username %></td>
+
+                        <td>
+                            <span class="tag tag--<%= employee.emp_status === '재직' ? 'ok' : 'neutral' %>">
+                                <%= employee.emp_status %>
+                            </span>
+                        </td>
+
+                        <td>
+                            <% if (employee.emp_status === '재직') { %>
+
+                                <a class="btn"
+                                   href="/auth/employees/<%= encodeURIComponent(employee.employee_no) %>/edit">
+                                    수정
+                                </a>
+
+                                <% if (user.employee_no !== employee.employee_no) { %>
+
+                                    <form
+                                        action="/auth/employees/<%= encodeURIComponent(employee.employee_no) %>/retire"
+                                        method="POST"
+                                        style="display: inline-block;"
+                                        onsubmit="return confirm('해당 직원을 퇴직 처리하시겠습니까?');">
+
+                                        <button type="submit" class="btn">
+                                            퇴직 처리
+                                        </button>
+
+                                    </form>
+
+                                <% } %>
+
+                            <% } else { %>
+
+                                -
+
+                            <% } %>
+                        </td>
+
+                    </tr>
+
+                <% }); %>
+            </tbody>
+        </table>
+    </div>
+
 <% } %>
 
 <%- include('../layout/footer') %>

@@ -1,0 +1,124 @@
+<%- include('../layout/header', {
+    title: '진료과 관리',
+    subtitle: '등록 · 수정 · 삭제. 소속 직원이 있으면 삭제할 수 없습니다.'
+}) %>
+
+<form class="form" method="POST" action="/auth/admin/departments">
+
+    <fieldset class="formsec">
+        <legend class="formsec__head">
+            <b>진료과 등록</b>
+        </legend>
+
+        <div class="formsec__body">
+
+            <label class="field">
+                <span>진료과코드 <span class="req">*</span></span>
+                <input name="dept_code"
+                       maxlength="20"
+                       required>
+            </label>
+
+            <label class="field">
+                <span>진료과명 <span class="req">*</span></span>
+                <input name="dept_name"
+                       maxlength="50"
+                       required>
+            </label>
+
+            <label class="field">
+                <span>위치 <span class="req">*</span></span>
+                <input name="location"
+                       maxlength="255"
+                       required>
+            </label>
+
+            <label class="field">
+                <span>전화번호 <span class="req">*</span></span>
+                <input name="phone"
+                       maxlength="20"
+                       required>
+            </label>
+
+        </div>
+    </fieldset>
+
+    <div class="form__actions">
+        <button type="submit" class="btn btn--primary">
+            등록
+        </button>
+    </div>
+
+</form>
+
+<div class="table-wrap">
+
+    <table>
+        <thead>
+            <tr>
+                <th>코드</th>
+                <th>진료과명 · 위치 · 전화번호 — 고친 뒤 수정</th>
+                <th>처리</th>
+            </tr>
+        </thead>
+
+        <tbody>
+
+            <% rows.forEach(function (r) { %>
+
+                <tr>
+                    <td class="code">
+                        <%= r.dept_code %>
+                    </td>
+
+                    <td>
+                        <form class="inline-form"
+                              method="POST"
+                              action="/auth/admin/departments/<%= encodeURIComponent(r.dept_code) %>/edit">
+
+                            <input name="dept_name"
+                                   value="<%= r.dept_name %>"
+                                   maxlength="50"
+                                   required>
+
+                            <input name="location"
+                                   value="<%= r.location %>"
+                                   maxlength="255"
+                                   required>
+
+                            <input name="phone"
+                                   value="<%= r.phone %>"
+                                   maxlength="20"
+                                   required>
+
+                            <button type="submit" class="btn btn--sm">
+                                수정
+                            </button>
+
+                        </form>
+                    </td>
+
+                    <td>
+                        <form class="inline-form"
+                              method="POST"
+                              action="/auth/admin/departments/<%= encodeURIComponent(r.dept_code) %>/delete"
+                              onsubmit="return confirm('해당 진료과를 삭제할까요?');">
+
+                            <button type="submit"
+                                    class="btn btn--secondary btn--sm">
+                                삭제
+                            </button>
+
+                        </form>
+                    </td>
+
+                </tr>
+
+            <% }) %>
+
+        </tbody>
+    </table>
+
+</div>
+
+<%- include('../layout/footer') %>

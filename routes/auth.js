@@ -7,7 +7,10 @@ const crypto = require('crypto');
 const { body, validationResult } = require('express-validator');
 const db = require('../db/db');
 
-
+function flashTo(req, res, type, text, url) {
+    req.session.flash = { type, text };
+    return res.redirect(url);
+}
 function requireRole(...allowedRoles) {
     return (req, res, next) => {
         if (!req.session || !req.session.user) {
@@ -450,8 +453,27 @@ router.post(
             12
         );
 
-        const patientNo =
-            'P' + crypto.randomBytes(8).toString('hex');
+    const year = new Date().getFullYear();
+    const prefix = `P${year}`;
+
+    const [rows] = await db.query(`
+        SELECT MAX(patient_no) AS last_no
+        FROM patient
+        WHERE patient_no REGEXP ?
+    `, [`^${prefix}[0-9]{6}$`]);
+
+    const lastNo = rows[0].last_no;
+
+    const nextNo = lastNo
+        ? Number(lastNo.slice(-6)) + 1
+        : 1;
+
+    if (nextNo > 999999) {
+        throw new Error('환자번호 생성 범위를 초과했습니다.');
+    }
+
+    const patientNo =
+        prefix + String(nextNo).padStart(6, '0');
 
         await db.query(`
             INSERT INTO patient (
@@ -822,6 +844,389 @@ router.post('/change-password', requireRole('patient'), async (req, res) => {
             error: '비밀번호 변경 중 오류가 발생했습니다.',
             success: null
         });
+    }
+});
+
+// 직원 등록 화면
+router.get('/employees/new', requireRole('관리자'), async (req, res) => {
+    try {
+        const [departments] = await db.query(`
+            SELECT dept_code, dept_name
+            FROM department
+            ORDER BY dept_code
+        `);
+
+        return res.render('auth/employee-form', {
+            employee: null,
+            departments,
+            mode: 'new'
+        });
+    } catch (err) {
+        console.error('직원 등록 화면 오류:', err);
+        return flashTo(req, res, 'danger',
+            '직원 등록 화면을 불러오지 못했습니다.',
+            '/auth/employees');
+    }
+});
+router.post('/employees/new', requireRole('관리자'), async (req, res) => {
+    try {
+        const {
+            employee_no,
+            employee_name,
+            job_type,
+            license_no,
+            username,
+            password,
+            dept_code
+        } = req.body;
+
+        if (!employee_no?.trim() ||
+            !employee_name?.trim() ||
+            !job_type ||
+            !username?.trim() ||
+            !password ||
+            !dept_code ||
+            employee_no.length > 20 ||
+            employee_name.length > 50 ||
+            username.length > 50 ||
+            (license_no && license_no.length > 50) ||
+            password.length < 8 ||
+            Buffer.byteLength(password, 'utf8') > 72 ||
+            !['관리자', '의사', '검사실', '원무'].includes(job_type)) {
+
+            return flashTo(req, res, 'danger',
+                '입력 항목을 다시 확인해주세요.',
+                '/auth/employees/new');
+        }
+        const [employees] = await db.query(`
+            SELECT employee_no
+            FROM employee
+            WHERE username = ? OR employee_no = ?
+        `, [username.trim(), employee_no.trim()]);
+
+        const [patients] = await db.query(`
+            SELECT patient_no
+            FROM patient
+            WHERE username = ?
+        `, [username.trim()]);
+
+        if (employees.length > 0 || patients.length > 0) {
+            return flashTo(req, res, 'danger',
+                '이미 사용 중인 아이디 또는 사번입니다.',
+                '/auth/employees/new');
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 12);
+
+        await db.query(`
+            INSERT INTO employee (
+                employee_no,
+                employee_name,
+                job_type,
+                license_no,
+                username,
+                password,
+                emp_status,
+                dept_code
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+            employee_no.trim(),
+            employee_name.trim(),
+            job_type,
+            license_no || null,
+            username.trim(),
+            hashedPassword,
+            '재직',
+            dept_code
+        ]);
+
+        return flashTo(req, res, 'ok',
+            '직원이 등록되었습니다.',
+            '/auth/employees');
+
+    } catch (err) {
+        console.error('직원 등록 오류:', err);
+        return flashTo(req, res, 'danger',
+            '직원 등록 중 오류가 발생했습니다.',
+            '/auth/employees/new');
+    }
+});
+
+router.get('/employees/:employeeNo/edit',
+    requireRole('관리자'), async (req, res) => {
+
+    try {
+        const [employees] = await db.query(`
+            SELECT employee_no, employee_name, job_type,
+                   license_no, username, emp_status, dept_code
+            FROM employee
+            WHERE employee_no = ?
+        `, [req.params.employeeNo]);
+
+        if (employees.length === 0 ||
+            employees[0].emp_status !== '재직') {
+            return flashTo(req, res, 'danger',
+                '수정 가능한 직원을 찾을 수 없습니다.',
+                '/auth/employees');
+        }
+
+        const [departments] = await db.query(`
+            SELECT dept_code, dept_name
+            FROM department
+            ORDER BY dept_code
+        `);
+
+        return res.render('auth/employee-form', {
+            employee: employees[0],
+            departments,
+            mode: 'edit'
+        });
+
+    } catch (err) {
+        console.error('직원 수정 화면 오류:', err);
+        return flashTo(req, res, 'danger',
+            '직원 정보를 불러오지 못했습니다.',
+            '/auth/employees');
+    }
+});
+
+router.post('/employees/:employeeNo/edit',
+    requireRole('관리자'), async (req, res) => {
+
+    try {
+        const employeeNo = req.params.employeeNo;
+        const {
+            employee_name,
+            job_type,
+            license_no,
+            username,
+            dept_code
+        } = req.body;
+
+        const editUrl =
+            '/auth/employees/' +
+            encodeURIComponent(employeeNo) + '/edit';
+
+        if (!employee_name?.trim() ||
+            !job_type ||
+            !username?.trim() ||
+            !dept_code ||
+            employee_name.length > 50 ||
+            username.length > 50 ||
+            (license_no && license_no.length > 50) ||
+            !['관리자', '의사', '검사실', '원무'].includes(job_type)) {
+
+            return flashTo(req, res, 'danger',
+                '입력 항목을 다시 확인해주세요.',
+                editUrl);
+        }
+
+        if (employeeNo === req.session.user.employee_no &&
+            job_type !== '관리자') {
+            return flashTo(req, res, 'danger',
+                '본인의 관리자 권한은 변경할 수 없습니다.',
+                editUrl);
+        }
+        const [employees] = await db.query(`
+            SELECT employee_no
+            FROM employee
+            WHERE username = ?
+            AND employee_no <> ?
+        `, [username.trim(), employeeNo]);
+
+        const [patients] = await db.query(`
+            SELECT patient_no
+            FROM patient
+            WHERE username = ?
+        `, [username.trim()]);
+
+        if (employees.length > 0 || patients.length > 0) {
+            return flashTo(req, res, 'danger',
+                '이미 사용 중인 아이디입니다.',
+                editUrl);
+        }
+
+        const [result] = await db.query(`
+            UPDATE employee
+            SET employee_name = ?,
+                job_type = ?,
+                license_no = ?,
+                username = ?,
+                dept_code = ?
+            WHERE employee_no = ?
+            AND emp_status = '재직'
+        `, [
+            employee_name.trim(),
+            job_type,
+            license_no || null,
+            username.trim(),
+            dept_code,
+            employeeNo
+        ]);
+
+        if (result.affectedRows === 0) {
+            return flashTo(req, res, 'danger',
+                '수정 가능한 직원을 찾을 수 없습니다.',
+                '/auth/employees');
+        }
+
+        return flashTo(req, res, 'ok',
+            '직원 정보가 수정되었습니다.',
+            '/auth/employees');
+
+    } catch (err) {
+        console.error('직원 수정 오류:', err);
+        return flashTo(req, res, 'danger',
+            '직원 수정 중 오류가 발생했습니다.',
+            '/auth/employees');
+    }
+});
+router.post('/employees/:employeeNo/retire',
+    requireRole('관리자'), async (req, res) => {
+
+    try {
+        const employeeNo = req.params.employeeNo;
+
+        if (employeeNo === req.session.user.employee_no) {
+            return flashTo(req, res, 'danger',
+                '본인 계정은 퇴직 처리할 수 없습니다.',
+                '/auth/employees');
+        }
+
+        const [result] = await db.query(`
+            UPDATE employee
+            SET emp_status = '퇴직'
+            WHERE employee_no = ?
+            AND emp_status = '재직'
+        `, [employeeNo]);
+
+        if (result.affectedRows === 0) {
+            return flashTo(req, res, 'warn',
+                '이미 퇴직했거나 존재하지 않는 직원입니다.',
+                '/auth/employees');
+        }
+
+        return flashTo(req, res, 'ok',
+            '직원이 퇴직 처리되었습니다.',
+            '/auth/employees');
+
+    } catch (err) {
+        console.error('직원 퇴직 처리 오류:', err);
+        return flashTo(req, res, 'danger',
+            '퇴직 처리 중 오류가 발생했습니다.',
+            '/auth/employees');
+    }
+});
+
+const DEPT_BACK = '/auth/admin/departments';
+
+router.get('/admin/departments', requireRole('관리자'), async (req, res) => {
+    const [rows] = await db.query(
+        'SELECT * FROM department ORDER BY dept_code'
+    );
+
+    res.render('auth/admin-departments', { rows });
+});
+router.post('/admin/departments', requireRole('관리자'), async (req, res) => {
+    const { dept_code, dept_name, location, phone } = req.body;
+
+    if (!dept_code?.trim() || !dept_name?.trim() ||
+        !location?.trim() || !phone?.trim()) {
+        return flashTo(req, res, 'danger', '빈 칸이 있습니다.', DEPT_BACK);
+    }
+
+    if (!/^[0-9-]{9,20}$/.test(phone.trim())) {
+        return flashTo(req, res, 'danger',
+            '전화번호 형식이 올바르지 않습니다.', DEPT_BACK);
+    }
+
+    try {
+        await db.query(
+            `INSERT INTO department
+            (dept_code, dept_name, location, phone)
+            VALUES (?, ?, ?, ?)`,
+            [dept_code.trim(), dept_name.trim(),
+            location.trim(), phone.trim()]
+        );
+
+        return flashTo(req, res, 'ok',
+            `${dept_name}을(를) 등록했습니다.`, DEPT_BACK);
+
+    } catch (err) {
+        if (err.code === 'ER_DUP_ENTRY') {
+            return flashTo(req, res, 'danger',
+                '이미 있는 진료과코드이거나 같은 이름의 진료과가 있습니다.',
+                DEPT_BACK);
+        }
+
+        throw err;
+    }
+});
+
+router.post('/admin/departments/:code/edit', requireRole('관리자'), async (req, res) => {
+    const { dept_name, location, phone } = req.body;
+
+    if (!dept_name?.trim() || !location?.trim() || !phone?.trim()) {
+        return flashTo(req, res, 'danger', '빈 칸이 있습니다.', DEPT_BACK);
+    }
+
+    if (!/^[0-9-]{9,20}$/.test(phone.trim())) {
+        return flashTo(req, res, 'danger',
+            '전화번호 형식이 올바르지 않습니다.', DEPT_BACK);
+    }
+
+    try {
+        const [r] = await db.query(
+            `UPDATE department
+             SET dept_name = ?, location = ?, phone = ?
+             WHERE dept_code = ?`,
+            [dept_name.trim(), location.trim(),
+             phone.trim(), req.params.code]
+        );
+
+        if (r.affectedRows === 0) {
+            return flashTo(req, res, 'danger',
+                '없는 진료과입니다.', DEPT_BACK);
+        }
+
+        return flashTo(req, res, 'ok',
+            '수정했습니다.', DEPT_BACK);
+
+    } catch (err) {
+        if (err.code === 'ER_DUP_ENTRY') {
+            return flashTo(req, res, 'danger',
+                '같은 이름의 진료과가 이미 있습니다.', DEPT_BACK);
+        }
+
+        throw err;
+    }
+});
+
+router.post('/admin/departments/:code/delete', requireRole('관리자'), async (req, res) => {
+    try {
+        const [r] = await db.query(
+            'DELETE FROM department WHERE dept_code = ?',
+            [req.params.code]
+        );
+
+        if (r.affectedRows === 0) {
+            return flashTo(req, res, 'danger',
+                '없는 진료과입니다.', DEPT_BACK);
+        }
+
+        return flashTo(req, res, 'ok',
+            '삭제했습니다.', DEPT_BACK);
+
+    } catch (err) {
+        if (err.code === 'ER_ROW_IS_REFERENCED_2' ||
+            err.code === 'ER_ROW_IS_REFERENCED') {
+            return flashTo(req, res, 'danger',
+                '소속 직원 또는 연결된 데이터가 있어 삭제할 수 없습니다.',
+                DEPT_BACK);
+        }
+
+        throw err;
     }
 });
 
